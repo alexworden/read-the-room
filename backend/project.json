@@ -11,7 +11,9 @@
       "dependsOn": ["build"],
       "options": {
         "buildTarget": "backend:build",
-        "runBuildTargetDependencies": false
+        "runBuildTargetDependencies": false,
+        "watch": true,
+        "hmr": true
       },
       "configurations": {
         "development": {

@@ -7,6 +7,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { Meeting } from '../types/meeting.types';
+import { config } from '../config';
 
 interface CreateMeetingProps {
   onMeetingCreated: (meeting: Meeting) => void;
@@ -17,7 +18,7 @@ export const CreateMeeting: React.FC<CreateMeetingProps> = ({ onMeetingCreated }
 
   const handleSubmit = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/meetings', {
+      const response = await fetch(`${config.apiUrl}/api/meetings`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

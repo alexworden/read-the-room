@@ -1,3 +1,5 @@
+import { config } from '../config';
+
 export class AudioService {
   private mediaRecorder: MediaRecorder | null = null;
   private audioChunks: Blob[] = [];
@@ -50,7 +52,7 @@ export class AudioService {
     formData.append('audio', audioBlob);
 
     try {
-      const response = await fetch(`http://localhost:3000/api/meetings/${meetingId}/audio`, {
+      const response = await fetch(`${config.apiUrl}/api/meetings/${meetingId}/audio`, {
         method: 'POST',
         body: formData,
       });

@@ -1,61 +1,101 @@
-import { Injectable } from '@nestjs/common';
-import { Meeting, Attendee, AttendeeStatus, StatusUpdate } from '../models/meeting.model';
-import { MeetingGateway } from '../gateways/meeting.gateway';
+import { Injectable, OnModuleDestroy } from '@nestjs/common';
+import { Meeting, Attendee, AttendeeStatus, StatusUpdate } from '../types/meeting.types';
+import { MeetingStateService } from './meeting-state.service';
+import { EventsService } from './events.service';
 import { v4 as uuidv4 } from 'uuid';
 
-@Injectable()
-export class MeetingService {
-  private meetings: Map<string, Meeting> = new Map();
+const ATTENDEE_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
 
-  constructor(private readonly meetingGateway: MeetingGateway) {}
+@Injectable()
+export class MeetingService implements OnModuleDestroy {
+  private timeoutInterval: NodeJS.Timeout;
+
+  constructor(
+    private readonly eventsService: EventsService,
+    private readonly meetingStateService: MeetingStateService
+  ) {
+    // Start the timeout checker
+    this.timeoutInterval = setInterval(() => this.checkTimeouts(), 15000); // Check every 15 seconds
+  }
+
+  onModuleDestroy() {
+    if (this.timeoutInterval) {
+      clearInterval(this.timeoutInterval);
+    }
+  }
+
+  private checkTimeouts(): void {
+    const now = new Date();
+    // Check timeouts and remove inactive attendees
+    const meetings = Array.from(this.meetingStateService.getMeetings().values());
+    meetings.forEach(meeting => {
+      let hasTimeouts = false;
+      meeting.attendees.forEach(attendee => {
+        if (attendee.lastSeen && now.getTime() - attendee.lastSeen.getTime() > ATTENDEE_TIMEOUT_MS) {
+          this.meetingStateService.removeAttendee(meeting.id, attendee.id);
+          hasTimeouts = true;
+        }
+      });
+      if (hasTimeouts) {
+        this.broadcastStats(meeting.id);
+      }
+    });
+  }
 
   createMeeting(title: string): Meeting {
+    const now = new Date().toISOString();
     const meeting: Meeting = {
       id: uuidv4(),
       title,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt: now,
+      updatedAt: now,
       transcription: [],
-      attendees: []
+      attendees: [],
     };
 
-    this.meetings.set(meeting.id, meeting);
+    this.meetingStateService.createMeeting(meeting);
     return meeting;
   }
 
-  getMeeting(id: string): Meeting | undefined {
-    return this.meetings.get(id);
+  getMeeting(meetingId: string): Meeting | undefined {
+    return this.meetingStateService.getMeeting(meetingId);
+  }
+
+  addTranscription(meetingId: string, text: string): void {
+    const meeting = this.getMeeting(meetingId);
+    if (!meeting) {
+      throw new Error('Meeting not found');
+    }
+    meeting.transcription.push(text);
+    this.eventsService.onTranscriptionReceived(meetingId, text);
   }
 
   addAttendee(meetingId: string, name: string): Attendee {
-    const meeting = this.meetings.get(meetingId);
+    const meeting = this.getMeeting(meetingId);
     if (!meeting) {
       throw new Error('Meeting not found');
     }
 
+    const now = new Date();
     const attendee: Attendee = {
       id: uuidv4(),
       name,
       currentStatus: AttendeeStatus.ENGAGED,
-      statusHistory: []
+      statusHistory: [{
+        status: AttendeeStatus.ENGAGED,
+        timestamp: now,
+      }],
+      lastSeen: now,
     };
 
     meeting.attendees.push(attendee);
-    this.meetings.set(meetingId, meeting);
-    
-    // Broadcast updated stats
+    this.meetingStateService.updateMeeting(meetingId, meeting);
     this.broadcastStats(meetingId);
-    
     return attendee;
   }
 
-  updateAttendeeStatus(
-    meetingId: string,
-    attendeeId: string,
-    status: AttendeeStatus,
-    context: string
-  ): StatusUpdate {
-    const meeting = this.meetings.get(meetingId);
+  updateAttendeeStatus(meetingId: string, attendeeId: string, status: AttendeeStatus): void {
+    const meeting = this.getMeeting(meetingId);
     if (!meeting) {
       throw new Error('Meeting not found');
     }
@@ -65,50 +105,47 @@ export class MeetingService {
       throw new Error('Attendee not found');
     }
 
-    const statusUpdate: StatusUpdate = {
-      status,
-      timestamp: new Date(),
-      context
-    };
+    if (attendee.currentStatus !== status) {
+      attendee.currentStatus = status;
+      attendee.statusHistory.push({
+        status,
+        timestamp: new Date(),
+      });
 
-    attendee.statusHistory.push(statusUpdate);
-    attendee.currentStatus = status;
-    this.meetings.set(meetingId, meeting);
-
-    // Broadcast updated stats
-    this.broadcastStats(meetingId);
-
-    return statusUpdate;
+      // Calculate and broadcast updated stats
+      const stats = this.calculateMeetingStats(meeting);
+      this.eventsService.onStatsUpdated(meetingId, stats);
+    }
   }
 
-  addTranscription(meetingId: string, text: string): void {
-    const meeting = this.meetings.get(meetingId);
+  private calculateMeetingStats(meeting: Meeting): Record<string, number> {
+    const stats = {
+      total: meeting.attendees.length,
+      engaged: meeting.attendees.filter(a => a.currentStatus === AttendeeStatus.ENGAGED).length,
+      confused: meeting.attendees.filter(a => a.currentStatus === AttendeeStatus.CONFUSED).length,
+      idea: meeting.attendees.filter(a => a.currentStatus === AttendeeStatus.IDEA).length,
+      disagree: meeting.attendees.filter(a => a.currentStatus === AttendeeStatus.DISAGREE).length,
+    };
+
+    return stats;
+  }
+
+  getMeetingStats(meetingId: string): Record<string, number> {
+    const meeting = this.getMeeting(meetingId);
     if (!meeting) {
       throw new Error('Meeting not found');
     }
 
-    meeting.transcription.push(text);
-    meeting.updatedAt = new Date();
-    this.meetings.set(meetingId, meeting);
-
-    // Broadcast transcription update
-    this.meetingGateway.broadcastTranscription(meetingId, text);
+    return this.calculateMeetingStats(meeting);
   }
 
   private broadcastStats(meetingId: string): void {
-    const meeting = this.meetings.get(meetingId);
-    if (!meeting) {
-      return;
-    }
+    const meeting = this.meetingStateService.getMeeting(meetingId);
+    if (!meeting) return;
 
-    const stats = Object.values(AttendeeStatus).reduce(
-      (acc, status) => {
-        acc[status] = meeting.attendees.filter(a => a.currentStatus === status).length;
-        return acc;
-      },
-      {} as Record<AttendeeStatus, number>
-    );
+    const stats = this.calculateMeetingStats(meeting);
 
-    this.meetingGateway.broadcastStats(meetingId, stats);
+    // Broadcast stats to all clients in the meeting
+    this.eventsService.onStatsUpdated(meetingId, stats);
   }
 }

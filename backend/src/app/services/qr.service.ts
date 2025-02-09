@@ -7,11 +7,10 @@ export class QRService {
   constructor(private readonly configService: ConfigService) {}
 
   async generateMeetingQR(meetingId: string): Promise<string> {
-    const webUrl = this.configService.get<string>('WEB_URL');
+    const webUrl = this.configService.get<string>('WEB_URL') || 'http://localhost:4200';
     const meetingUrl = `${webUrl}/join/${meetingId}`;
     
     try {
-      // Generate QR code as data URL
       const qrDataUrl = await QRCode.toDataURL(meetingUrl, {
         width: 300,
         margin: 2,

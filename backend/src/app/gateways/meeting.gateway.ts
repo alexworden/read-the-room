@@ -1,71 +1,83 @@
 import {
   WebSocketGateway,
   WebSocketServer,
-  SubscribeMessage,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  SubscribeMessage,
 } from '@nestjs/websockets';
+import { Logger } from '@nestjs/common';
+import { MeetingStateService } from '../services/meeting-state.service';
 import { Server, Socket } from 'socket.io';
-import { MeetingService } from '../services/meeting.service';
 
 @WebSocketGateway({
   cors: {
-    origin: '*',
+    origin: ['http://localhost:4200', 'http://localhost:3000'],
+    credentials: true,
   },
+  namespace: 'meetings',
 })
 export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect {
+  private readonly logger = new Logger(MeetingGateway.name);
+  private clients: Map<string, Set<Socket>> = new Map(); // meetingId -> Set of clients
+
   @WebSocketServer()
   server: Server;
 
-  private rooms: Map<string, Set<Socket>> = new Map();
-
-  constructor(private readonly meetingService: MeetingService) {}
-
-  handleConnection(client: Socket) {
-    console.log(`Client connected: ${client.id}`);
+  constructor(private readonly meetingStateService: MeetingStateService) {
+    this.logger.log('MeetingGateway initialized');
   }
 
-  handleDisconnect(client: Socket) {
-    console.log(`Client disconnected: ${client.id}`);
-    // Remove client from all rooms
-    this.rooms.forEach((clients, roomId) => {
-      if (clients.has(client)) {
-        clients.delete(client);
-        if (clients.size === 0) {
-          this.rooms.delete(roomId);
-        }
-      }
+  handleConnection(client: Socket) {
+    const meetingId = client.handshake.query.meetingId as string;
+    this.logger.log(`Client attempting to connect to meeting ${meetingId}`);
+
+    if (!meetingId) {
+      this.logger.error('No meeting ID provided in connection query');
+      client.disconnect();
+      return;
+    }
+
+    const meeting = this.meetingStateService.getMeeting(meetingId);
+    if (!meeting) {
+      this.logger.error(`Meeting ${meetingId} not found`);
+      client.disconnect();
+      return;
+    }
+
+    // Join the meeting room
+    client.join(meetingId);
+    
+    // Add client to the meeting's client set
+    if (!this.clients.has(meetingId)) {
+      this.clients.set(meetingId, new Set());
+    }
+    this.clients.get(meetingId).add(client);
+
+    this.logger.log(`Client connected to meeting ${meetingId}`);
+
+    // Handle heartbeat
+    client.on('heartbeat', (data: { attendeeId: string }) => {
+      this.handleHeartbeat(meetingId, data.attendeeId);
     });
   }
 
-  @SubscribeMessage('joinMeeting')
-  handleJoinMeeting(client: Socket, meetingId: string) {
-    // Add client to room
-    if (!this.rooms.has(meetingId)) {
-      this.rooms.set(meetingId, new Set());
-    }
-    this.rooms.get(meetingId).add(client);
-
-    // Send current meeting state
-    const meeting = this.meetingService.getMeeting(meetingId);
-    if (meeting) {
-      client.emit('meetingState', meeting);
+  handleDisconnect(client: Socket) {
+    const meetingId = client.handshake.query.meetingId as string;
+    if (meetingId && this.clients.has(meetingId)) {
+      this.clients.get(meetingId).delete(client);
+      this.logger.log(`Client disconnected from meeting ${meetingId}`);
     }
   }
 
-  broadcastTranscription(meetingId: string, text: string) {
-    const clients = this.rooms.get(meetingId);
-    if (clients) {
-      const data = { type: 'transcription', text };
-      clients.forEach(client => client.emit('message', data));
-    }
+  @SubscribeMessage('heartbeat')
+  handleHeartbeat(meetingId: string, attendeeId: string) {
+    // Update attendee's last heartbeat time
+    this.meetingStateService.updateAttendeeHeartbeat(meetingId, attendeeId);
+    this.logger.debug(`Heartbeat received from attendee ${attendeeId} in meeting ${meetingId}`);
   }
 
-  broadcastStats(meetingId: string, stats: Record<string, number>) {
-    const clients = this.rooms.get(meetingId);
-    if (clients) {
-      const data = { type: 'stats', stats };
-      clients.forEach(client => client.emit('message', data));
-    }
+  // Helper method to broadcast to all clients in a meeting
+  broadcastToMeeting(meetingId: string, event: string, data: any) {
+    this.server.to(meetingId).emit(event, data);
   }
 }

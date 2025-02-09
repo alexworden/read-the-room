@@ -7,6 +7,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { Attendee } from '../types/meeting.types';
+import { config } from '../config';
 
 interface JoinMeetingProps {
   meetingId: string;
@@ -18,7 +19,7 @@ export const JoinMeeting: React.FC<JoinMeetingProps> = ({ meetingId, onJoined })
 
   const handleSubmit = async () => {
     try {
-      const response = await fetch(`http://localhost:3000/api/meetings/${meetingId}/attendees`, {
+      const response = await fetch(`${config.apiUrl}/api/meetings/${meetingId}/attendees`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

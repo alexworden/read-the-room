@@ -8,10 +8,11 @@ export enum AttendeeStatus {
 export interface Meeting {
   id: string;
   title: string;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: string;
+  updatedAt: string;
   transcription: string[];
   attendees: Attendee[];
+  qrCode?: string;
 }
 
 export interface Attendee {
@@ -19,10 +20,11 @@ export interface Attendee {
   name: string;
   currentStatus: AttendeeStatus;
   statusHistory: StatusUpdate[];
+  lastSeen?: Date;
 }
 
 export interface StatusUpdate {
   status: AttendeeStatus;
-  timestamp: Date;
+  timestamp: string;
   context: string;
 }

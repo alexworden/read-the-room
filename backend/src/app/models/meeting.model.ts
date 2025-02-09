@@ -1,10 +1,11 @@
 export interface Meeting {
   id: string;
   title: string;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: string; // ISO date string
+  updatedAt: string; // ISO date string
   transcription: string[];
   attendees: Attendee[];
+  qrCode?: string; // Optional QR code URL for meeting access
 }
 
 export interface Attendee {
@@ -15,8 +16,9 @@ export interface Attendee {
 }
 
 export interface StatusUpdate {
+  attendeeId: string;
   status: AttendeeStatus;
-  timestamp: Date;
+  timestamp: string; // ISO date string
   context: string; // The transcribed text around when the status was updated
 }
 

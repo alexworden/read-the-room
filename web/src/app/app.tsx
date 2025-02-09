@@ -26,16 +26,28 @@ export function App() {
         )}
 
         {meeting && !attendee && (
-          <JoinMeeting
-            meetingId={meeting.id}
-            onJoined={handleJoinedMeeting}
-          />
+          <div className="space-y-8">
+            <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-md">
+              <h2 className="text-2xl font-bold mb-4">Meeting Created: {meeting.title}</h2>
+              <div className="flex justify-center mb-4">
+                <img src={meeting.qrCode} alt="Meeting QR Code" className="w-64 h-64" />
+              </div>
+              <p className="text-sm text-gray-600 text-center">
+                Share this QR code with attendees to join the meeting
+              </p>
+            </div>
+            <JoinMeeting
+              meetingId={meeting.id}
+              onJoined={handleJoinedMeeting}
+            />
+          </div>
         )}
 
         {meeting && attendee && (
           <MeetingRoom
             meetingId={meeting.id}
             attendeeId={attendee.id}
+            meeting={meeting}
           />
         )}
       </div>

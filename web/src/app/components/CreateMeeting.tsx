@@ -12,6 +12,7 @@ export const CreateMeeting: React.FC<CreateMeetingProps> = ({ onMeetingCreated }
     e.preventDefault();
 
     try {
+      console.log('Sending request with title:', title);
       const response = await fetch('/api/meetings', {
         method: 'POST',
         headers: {
@@ -22,8 +23,16 @@ export const CreateMeeting: React.FC<CreateMeetingProps> = ({ onMeetingCreated }
 
       if (response.ok) {
         const meeting = await response.json();
+        console.log('Meeting created successfully:', meeting);
         onMeetingCreated(meeting);
         setTitle('');
+      } else {
+        const errorText = await response.text();
+        console.error('Failed to create meeting:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorText,
+        });
       }
     } catch (error) {
       console.error('Failed to create meeting:', error);
