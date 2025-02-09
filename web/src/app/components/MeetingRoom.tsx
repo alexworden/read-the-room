@@ -20,6 +20,8 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meetingId, attendeeId,
   });
   const [qrCode, setQrCode] = useState<string>('');
   const [attendeeName, setAttendeeName] = useState<string>('');
+  const [showCopied, setShowCopied] = useState(false);
+  const joinUrl = `${window.location.origin}/join/${meetingId}`;
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
@@ -149,6 +151,16 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meetingId, attendeeId,
     }
   };
 
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(joinUrl);
+      setShowCopied(true);
+      setTimeout(() => setShowCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto p-6 bg-white rounded-lg shadow-md">
       {/* Header Section with Meeting Title and QR Code */}
@@ -158,8 +170,61 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meetingId, attendeeId,
           <p className="text-gray-600 mt-2">Meeting ID: {meetingId}</p>
         </div>
         <div className="flex flex-col items-center">
-          <img src={qrCode} alt="Meeting QR Code" className="w-80 h-80" />
+          <a href={joinUrl} target="_blank" rel="noopener noreferrer" className="block">
+            <img 
+              src={qrCode} 
+              alt="Meeting QR Code" 
+              className="w-80 h-80 cursor-pointer hover:opacity-80 transition-opacity" 
+              title="Click to open join URL"
+            />
+          </a>
           <p className="text-sm text-gray-600 mt-2">Share this QR code to invite attendees</p>
+          <div className="mt-2 flex items-center space-x-2">
+            <a 
+              href={joinUrl} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-indigo-600 hover:text-indigo-800 transition-colors"
+            >
+              Link to join meeting
+            </a>
+            <button
+              onClick={copyToClipboard}
+              className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+              title="Copy to clipboard"
+            >
+              <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                className="h-5 w-5 text-gray-500"
+                fill="none" 
+                viewBox="0 0 24 24" 
+                stroke="currentColor"
+              >
+                {showCopied ? (
+                  // Checkmark icon
+                  <path 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    strokeWidth={2} 
+                    d="M5 13l4 4L19 7"
+                  />
+                ) : (
+                  // Copy icon
+                  <path 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    strokeWidth={2} 
+                    d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"
+                  />
+                )}
+              </svg>
+            </button>
+            {showCopied && (
+              <span className="text-sm text-green-600 absolute mt-8">
+                Copied!
+              </span>
+            )}
+          </div>
         </div>
       </div>
 

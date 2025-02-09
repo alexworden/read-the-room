@@ -54,7 +54,8 @@ export class MeetingService {
   }
 
   async generateQRCode(meetingId: string): Promise<string> {
-    const qrCode = await QRCode.toDataURL(meetingId);
+    const joinUrl = `${process.env.FRONTEND_URL || 'http://localhost:4200'}/join/${meetingId}`;
+    const qrCode = await QRCode.toDataURL(joinUrl);
     await this.meetingRepository.updateMeetingQrCode(meetingId, qrCode);
     return qrCode;
   }
