@@ -18,6 +18,7 @@ A real-time meeting engagement tracking application that uses AI to transcribe c
   - Web: React.js with Tailwind CSS
   - Mobile: React Native (Expo)
 - **Backend**: NestJS (TypeScript)
+- **Database**: PostgreSQL with direct queries (no ORM)
 - **Real-time Communication**: Socket.IO
 - **AI Integration**: OpenAI Whisper API
 - **State Management**: In-memory with NestJS services
@@ -47,16 +48,36 @@ A real-time meeting engagement tracking application that uses AI to transcribe c
    brew install postgresql@15
    brew services start postgresql@15
 
-   # Run the database setup script
+   # Run the database setup script which creates both development and production databases
+   cd backend
    ./scripts/setup-db.sh
    ```
+
+   The setup script creates two databases:
+   - `readtheroom_dev`: Used for development and testing
+   - `readtheroom`: Used for production
+
+   By default:
+   - The development server uses `readtheroom_dev`
+   - Tests use `readtheroom_dev`
+   - Production uses `readtheroom`
 
 3. Environment Variables
    ```bash
    # Copy the example environment file
    cp .env.example .env
    
-   # Edit the .env file if you need to change any URLs
+   # Edit the .env file if you need to change any URLs or database settings
+   ```
+
+   Database configuration can be customized using these environment variables:
+   ```bash
+   DB_HOST=localhost
+   DB_PORT=5432
+   DB_USERNAME=postgres
+   DB_PASSWORD=postgres
+   DB_DATABASE=readtheroom_dev  # For development
+   # DB_DATABASE=readtheroom    # For production
    ```
 
 ## Project Structure
@@ -101,23 +122,17 @@ The backend server is built with NestJS and provides RESTful APIs and Socket.IO 
    ```bash
    npm run start:dev
    ```
-   This will start the server in watch mode at http://localhost:3000
+   This will use the `readtheroom_dev` database by default.
 
 4. Run tests:
    ```bash
-   # Run unit tests
-   npm run test
-
-   # Run tests in watch mode
-   npm run test:watch
-
-   # Run end-to-end tests
-   npm run test:e2e
+   npm test
    ```
+   Tests will use the `readtheroom_dev` database.
 
 ### Web Application
 
-The web app is built with React, Vite, and managed through NX workspace.
+The web application is built with React and uses Socket.IO for real-time communication.
 
 1. Navigate to the web directory:
    ```bash
@@ -131,18 +146,7 @@ The web app is built with React, Vite, and managed through NX workspace.
 
 3. Start the development server:
    ```bash
-   npx nx serve web
-   ```
-   This will start the web app at http://localhost:4200
-
-4. Build for production:
-   ```bash
-   npx nx build web
-   ```
-
-5. Run tests:
-   ```bash
-   npx nx test web
+   npm start
    ```
 
 ## API Endpoints
@@ -191,7 +195,7 @@ The application uses Socket.IO for real-time communication. Here are the main ev
 ## Contributing
 
 1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
