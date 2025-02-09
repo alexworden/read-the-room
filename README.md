@@ -29,6 +29,25 @@ A real-time meeting engagement tracking application that uses AI to transcribe c
 - OpenAI API key (for transcription features)
 - NX workspace CLI (`npm install -g nx`)
 
+## Environment Setup
+
+1. OpenAI API Key
+   ```bash
+   # Add this to your ~/.zshrc file
+   export READ_THE_ROOM_OPENAI_KEY=your_openai_api_key_here
+   
+   # Then reload your shell
+   source ~/.zshrc
+   ```
+
+2. Environment Variables
+   ```bash
+   # Copy the example environment file
+   cp .env.example .env
+   
+   # Edit the .env file if you need to change any URLs
+   ```
+
 ## Project Structure
 
 ```

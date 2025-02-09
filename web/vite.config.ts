@@ -9,7 +9,7 @@ export default defineConfig({
   cacheDir: '../node_modules/.vite/web',
   server: {
     port: 4200,
-    host: 'localhost',
+    host: true, // listen on all addresses
     proxy: {
       '/api': {
         target: 'http://localhost:3000',
@@ -37,6 +37,19 @@ export default defineConfig({
     reportCompressedSize: true,
     commonjsOptions: {
       transformMixedEsModules: true,
+    },
+  },
+  test: {
+    globals: true,
+    cache: {
+      dir: '../node_modules/.vitest',
+    },
+    environment: 'jsdom',
+    include: ['src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
+    reporters: ['default'],
+    coverage: {
+      reportsDirectory: '../coverage/web',
+      provider: 'v8',
     },
   },
 });
