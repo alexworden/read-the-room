@@ -1,11 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { TranscriptionService } from './transcription.service';
-import { MeetingService } from './meeting.service';
 import { DatabaseService } from './database.service';
 import { TestDatabaseService } from './test-database.service';
+import { MeetingService } from './meeting.service';
 import { MeetingRepository } from '../repositories/meeting.repository';
 import { AttendeeRepository } from '../repositories/attendee.repository';
 import { TranscriptionRepository } from '../repositories/transcription.repository';
+import { Meeting, Attendee, Transcription } from '../types/meeting.types';
 
 describe('TranscriptionService', () => {
   let service: TranscriptionService;
@@ -42,47 +43,42 @@ describe('TranscriptionService', () => {
     await dbService.query('TRUNCATE meetings, attendees, status_updates, transcriptions CASCADE');
   });
 
-  it('should be defined', () => {
-    expect(service).toBeDefined();
-  });
-
   describe('processTranscription', () => {
     it('should process transcription and update attendee status', async () => {
-      // Create a meeting and attendee first
       const meeting = await meetingService.createMeeting('Test Meeting');
-      const attendee = await meetingService.addAttendee(meeting.id, 'Test Attendee');
+      const attendee = await meetingService.addAttendee(meeting.id, 'John');
 
-      // Process a transcription that should trigger a status update
-      await service.processTranscription(meeting.id, attendee.id, 'I am confused about this');
+      await service.processTranscription(meeting.id, attendee.id, 'I am confused about this topic');
 
-      // Verify transcription was saved
+      // Check that the transcription was saved
       const transcriptions = await meetingService.getTranscriptions(meeting.id);
       expect(transcriptions.length).toBe(1);
-      expect(transcriptions[0].text).toBe('I am confused about this');
+      expect(transcriptions[0].text).toBe('I am confused about this topic');
+      expect(transcriptions[0].meeting_id).toBe(meeting.id);
 
-      // Verify attendee status was updated
+      // Check that the attendee status was updated
       const updatedAttendee = await meetingService.getAttendee(attendee.id);
       expect(updatedAttendee?.current_status).toBe('confused');
     });
 
     it('should handle multiple transcriptions', async () => {
-      // Create a meeting and attendee first
       const meeting = await meetingService.createMeeting('Test Meeting');
-      const attendee = await meetingService.addAttendee(meeting.id, 'Test Attendee');
+      const attendee = await meetingService.addAttendee(meeting.id, 'John');
 
-      // Process multiple transcriptions
       await service.processTranscription(meeting.id, attendee.id, 'I am confused about this');
-      await service.processTranscription(meeting.id, attendee.id, 'Now I have an idea!');
+      await service.processTranscription(meeting.id, attendee.id, 'I have an idea about this');
+      await service.processTranscription(meeting.id, attendee.id, 'I disagree with that');
 
-      // Verify transcriptions were saved
+      // Check that all transcriptions were saved
       const transcriptions = await meetingService.getTranscriptions(meeting.id);
-      expect(transcriptions.length).toBe(2);
+      expect(transcriptions.length).toBe(3);
       expect(transcriptions[0].text).toBe('I am confused about this');
-      expect(transcriptions[1].text).toBe('Now I have an idea!');
+      expect(transcriptions[1].text).toBe('I have an idea about this');
+      expect(transcriptions[2].text).toBe('I disagree with that');
 
-      // Verify attendee status was updated to the latest
+      // Check that the attendee status was updated to the latest
       const updatedAttendee = await meetingService.getAttendee(attendee.id);
-      expect(updatedAttendee?.current_status).toBe('idea');
+      expect(updatedAttendee?.current_status).toBe('disagree');
     });
   });
 });

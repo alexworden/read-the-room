@@ -132,7 +132,7 @@ The backend server is built with NestJS and provides RESTful APIs and Socket.IO 
 
 ### Web Application
 
-The web application is built with React and uses Socket.IO for real-time communication.
+The web application is built with React and uses Socket.IO for real-time communication. It's managed through NX workspace.
 
 1. Navigate to the web directory:
    ```bash
@@ -146,8 +146,9 @@ The web application is built with React and uses Socket.IO for real-time communi
 
 3. Start the development server:
    ```bash
-   npm start
+   npx nx serve web
    ```
+   This will start the web app at http://localhost:4200
 
 ## API Endpoints
 

@@ -15,7 +15,7 @@ export class TestDatabaseService extends DatabaseService {
       port: parseInt(process.env.DB_PORT || '5432'),
       user: process.env.DB_USERNAME || 'postgres',
       password: process.env.DB_PASSWORD || 'postgres',
-      database: 'readtheroom_test',
+      database: 'readtheroom_dev',
     });
   }
 
@@ -26,7 +26,7 @@ export class TestDatabaseService extends DatabaseService {
   async setupTestDatabase(): Promise<void> {
     try {
       // Apply schema to test database
-      const schemaPath = path.join(__dirname, '..', '..', '..', 'schema.sql');
+      const schemaPath = path.join(__dirname, '..', 'schema.sql');
       const schema = fs.readFileSync(schemaPath, 'utf8');
       await this.testPool.query(schema);
 
@@ -44,7 +44,7 @@ export class TestDatabaseService extends DatabaseService {
     await this.testPool.end();
   }
 
-  async getClient(): Promise<Pool> {
+  async getClient() {
     return this.testPool.connect();
   }
 
