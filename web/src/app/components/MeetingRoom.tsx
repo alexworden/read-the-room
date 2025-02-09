@@ -3,12 +3,11 @@ import { AttendeeStatus, Meeting, Attendee } from '../types/meeting.types';
 import { io, Socket } from 'socket.io-client';
 
 interface MeetingRoomProps {
-  meetingId: string;
-  attendeeId: string;
   meeting: Meeting;
+  attendee: Attendee;
 }
 
-export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meetingId, attendeeId, meeting }) => {
+export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) => {
   const [currentStatus, setCurrentStatus] = useState<AttendeeStatus>(AttendeeStatus.ENGAGED);
   const [transcription, setTranscription] = useState<string[]>([]);
   const [stats, setStats] = useState<Record<string, number>>({
@@ -18,45 +17,13 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meetingId, attendeeId,
     idea: 0,
     disagree: 0
   });
-  const [qrCode, setQrCode] = useState<string>('');
-  const [attendeeName, setAttendeeName] = useState<string>('');
   const [showCopied, setShowCopied] = useState(false);
-  const joinUrl = `${window.location.origin}/join/${meetingId}`;
+  const joinUrl = `${window.location.origin}/join/${meeting.id}`;
   const socketRef = useRef<Socket | null>(null);
-
-  useEffect(() => {
-    const fetchQrCode = async () => {
-      try {
-        const response = await fetch(`/api/meetings/${meetingId}/qr`);
-        if (response.ok) {
-          const { qrCode } = await response.json();
-          setQrCode(qrCode);
-        }
-      } catch (error) {
-        console.error('Failed to fetch QR code:', error);
-      }
-    };
-    fetchQrCode();
-  }, [meetingId]);
-
-  useEffect(() => {
-    const fetchAttendee = async () => {
-      try {
-        const response = await fetch(`/api/meetings/${meetingId}/attendees/${attendeeId}`);
-        if (response.ok) {
-          const attendee: Attendee = await response.json();
-          setAttendeeName(attendee.name);
-        }
-      } catch (error) {
-        console.error('Failed to fetch attendee:', error);
-      }
-    };
-    fetchAttendee();
-  }, [meetingId, attendeeId]);
 
   const fetchStats = async () => {
     try {
-      const response = await fetch(`/api/meetings/${meetingId}/stats`);
+      const response = await fetch(`/api/meetings/${meeting.id}/stats`);
       if (response.ok) {
         const newStats = await response.json();
         setStats(newStats);
@@ -73,7 +40,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meetingId, attendeeId,
       console.log('Connecting to Socket.IO server...');
       
       socketRef.current = io('http://localhost:3000', {
-        query: { meetingId },
+        query: { meetingId: meeting.id },
         transports: ['websocket'],
       });
 
@@ -82,11 +49,11 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meetingId, attendeeId,
         
         // Start sending heartbeats
         heartbeatInterval = setInterval(() => {
-          socketRef.current?.emit('heartbeat', { attendeeId });
+          socketRef.current?.emit('heartbeat', { attendeeId: attendee.id });
         }, 15000);
 
         // Join the meeting room
-        socketRef.current?.emit('joinMeeting', { meetingId, attendeeId });
+        socketRef.current?.emit('joinMeeting', { meetingId: meeting.id, attendeeId: attendee.id });
 
         // Fetch initial stats
         fetchStats();
@@ -128,11 +95,11 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meetingId, attendeeId,
         clearInterval(heartbeatInterval);
       }
     };
-  }, [meetingId, attendeeId]);
+  }, [meeting.id, attendee.id]);
 
   const updateStatus = async (status: AttendeeStatus) => {
     try {
-      const response = await fetch(`/api/meetings/${meetingId}/attendees/${attendeeId}/status`, {
+      const response = await fetch(`/api/meetings/${meeting.id}/attendees/${attendee.id}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -143,8 +110,8 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meetingId, attendeeId,
       if (response.ok) {
         setCurrentStatus(status);
         // Emit status update via socket
-        console.log('Emitting status update:', { meetingId, attendeeId, status });
-        socketRef.current?.emit('updateStatus', { meetingId, attendeeId, status });
+        console.log('Emitting status update:', { meetingId: meeting.id, attendeeId: attendee.id, status });
+        socketRef.current?.emit('updateStatus', { meetingId: meeting.id, attendeeId: attendee.id, status });
       }
     } catch (error) {
       console.error('Failed to update status:', error);
@@ -162,121 +129,99 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meetingId, attendeeId,
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-6 bg-white rounded-lg shadow-md">
-      {/* Header Section with Meeting Title and QR Code */}
-      <div className="flex justify-between items-start mb-8 border-b pb-6">
-        <div>
-          <h1 className="text-3xl font-bold">{meeting.title}</h1>
-          <p className="text-gray-600 mt-2">Meeting ID: {meetingId}</p>
-        </div>
-        <div className="flex flex-col items-center">
-          <a href={joinUrl} target="_blank" rel="noopener noreferrer" className="block">
-            <img 
-              src={qrCode} 
-              alt="Meeting QR Code" 
-              className="w-80 h-80 cursor-pointer hover:opacity-80 transition-opacity" 
-              title="Click to open join URL"
-            />
-          </a>
-          <p className="text-sm text-gray-600 mt-2">Share this QR code to invite attendees</p>
-          <div className="mt-2 flex items-center space-x-2">
-            <a 
-              href={joinUrl} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-indigo-600 hover:text-indigo-800 transition-colors"
-            >
-              Link to join meeting
-            </a>
-            <button
-              onClick={copyToClipboard}
-              className="p-1 hover:bg-gray-100 rounded-full transition-colors"
-              title="Copy to clipboard"
-            >
-              <svg 
-                xmlns="http://www.w3.org/2000/svg" 
-                className="h-5 w-5 text-gray-500"
-                fill="none" 
-                viewBox="0 0 24 24" 
-                stroke="currentColor"
+    <div className="space-y-8">
+      <div className="max-w-4xl mx-auto p-8 bg-white rounded-lg shadow-md">
+        <div className="flex items-start justify-between space-x-8">
+          <div className="flex-1 text-center">
+            <h1 className="text-5xl font-bold mb-4">{meeting.title}</h1>
+            <div className="flex items-center justify-center space-x-2">
+              <a 
+                href={joinUrl} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-2xl text-indigo-600 hover:text-indigo-800 transition-colors inline-block"
               >
-                {showCopied ? (
-                  // Checkmark icon
-                  <path 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round" 
-                    strokeWidth={2} 
-                    d="M5 13l4 4L19 7"
-                  />
-                ) : (
-                  // Copy icon
-                  <path 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round" 
-                    strokeWidth={2} 
-                    d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"
-                  />
-                )}
-              </svg>
-            </button>
-            {showCopied && (
-              <span className="text-sm text-green-600 absolute mt-8">
-                Copied!
-              </span>
-            )}
+                {joinUrl}
+              </a>
+              <button
+                onClick={copyToClipboard}
+                className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+                title={showCopied ? "Copied!" : "Copy to clipboard"}
+              >
+                <svg 
+                  xmlns="http://www.w3.org/2000/svg" 
+                  className="h-6 w-6 text-gray-500"
+                  fill="none" 
+                  viewBox="0 0 24 24" 
+                  stroke="currentColor"
+                >
+                  {showCopied ? (
+                    <path 
+                      strokeLinecap="round" 
+                      strokeLinejoin="round" 
+                      strokeWidth={2} 
+                      d="M5 13l4 4L19 7"
+                    />
+                  ) : (
+                    <path 
+                      strokeLinecap="round" 
+                      strokeLinejoin="round" 
+                      strokeWidth={2} 
+                      d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"
+                    />
+                  )}
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div>
+            <a href={joinUrl} target="_blank" rel="noopener noreferrer" className="block">
+              <img 
+                src={meeting.qrCode} 
+                alt="Meeting QR Code" 
+                className="w-80 h-80 cursor-pointer hover:opacity-80 transition-opacity"
+                title="Click to open join URL" 
+              />
+            </a>
           </div>
         </div>
       </div>
 
       {/* Meeting Stats */}
-      <div className="mb-8">
-        <h2 className="text-xl font-semibold mb-4">Meeting Stats</h2>
-        <div className="grid grid-cols-5 gap-4">
-          <div className="p-4 bg-gray-50 rounded-lg text-center">
-            <div className="text-2xl font-bold">{stats.total}</div>
-            <div className="text-sm text-gray-600">Total</div>
+      <div className="max-w-4xl mx-auto p-8 bg-white rounded-lg shadow-md">
+        <h2 className="text-3xl font-bold mb-6">Meeting Stats</h2>
+        <div className="grid grid-cols-5 gap-6">
+          <div className="p-6 bg-gray-50 rounded-lg text-center">
+            <div className="text-3xl font-bold">{stats.total}</div>
+            <div className="text-xl text-gray-600">Total</div>
           </div>
-          <div className="p-4 bg-green-50 rounded-lg text-center">
-            <div className="text-2xl font-bold">{stats.engaged}</div>
-            <div className="text-sm text-gray-600">Engaged</div>
+          <div className="p-6 bg-green-50 rounded-lg text-center">
+            <div className="text-3xl font-bold">{stats.engaged}</div>
+            <div className="text-xl text-gray-600">Engaged</div>
           </div>
-          <div className="p-4 bg-yellow-50 rounded-lg text-center">
-            <div className="text-2xl font-bold">{stats.confused}</div>
-            <div className="text-sm text-gray-600">Confused</div>
+          <div className="p-6 bg-yellow-50 rounded-lg text-center">
+            <div className="text-3xl font-bold">{stats.confused}</div>
+            <div className="text-xl text-gray-600">Confused</div>
           </div>
-          <div className="p-4 bg-blue-50 rounded-lg text-center">
-            <div className="text-2xl font-bold">{stats.idea}</div>
-            <div className="text-sm text-gray-600">Ideas</div>
+          <div className="p-6 bg-blue-50 rounded-lg text-center">
+            <div className="text-3xl font-bold">{stats.idea}</div>
+            <div className="text-xl text-gray-600">Ideas</div>
           </div>
-          <div className="p-4 bg-red-50 rounded-lg text-center">
-            <div className="text-2xl font-bold">{stats.disagree}</div>
-            <div className="text-sm text-gray-600">Disagree</div>
+          <div className="p-6 bg-red-50 rounded-lg text-center">
+            <div className="text-3xl font-bold">{stats.disagree}</div>
+            <div className="text-xl text-gray-600">Disagree</div>
           </div>
         </div>
       </div>
 
-      {/* Transcriptions */}
-      <div className="mb-8">
-        <h2 className="text-xl font-semibold mb-4">Transcriptions</h2>
-        <div className="bg-gray-50 p-4 rounded-lg max-h-60 overflow-y-auto">
-          {transcription.map((text, index) => (
-            <div key={index} className="mb-2 last:mb-0">
-              {text}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* User Controls Section */}
-      <div className="mt-8 border-t pt-6">
-        <h2 className="text-xl font-semibold mb-4">
-          {attendeeName ? `${attendeeName}'s Status Controls` : 'Your Status Controls'}
-        </h2>
-        <p className="text-gray-600 mb-4">Use these buttons to indicate your current status in the meeting</p>
-        <div className="grid grid-cols-4 gap-4">
+      {/* User Controls */}
+      <div className="max-w-4xl mx-auto p-8 bg-white rounded-lg shadow-md">
+        <h2 className="text-3xl font-bold mb-6">{attendee.name}'s Status Controls</h2>
+        <p className="text-xl text-gray-600 mb-6">Use these buttons to indicate your current status in the meeting</p>
+        <div className="grid grid-cols-4 gap-6">
           <button
             onClick={() => updateStatus(AttendeeStatus.ENGAGED)}
-            className={`p-4 rounded-lg text-center ${
+            className={`p-6 rounded-lg text-center text-xl ${
               currentStatus === AttendeeStatus.ENGAGED
                 ? 'bg-green-600 text-white'
                 : 'bg-green-100 hover:bg-green-200'
@@ -286,7 +231,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meetingId, attendeeId,
           </button>
           <button
             onClick={() => updateStatus(AttendeeStatus.CONFUSED)}
-            className={`p-4 rounded-lg text-center ${
+            className={`p-6 rounded-lg text-center text-xl ${
               currentStatus === AttendeeStatus.CONFUSED
                 ? 'bg-yellow-600 text-white'
                 : 'bg-yellow-100 hover:bg-yellow-200'
@@ -296,7 +241,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meetingId, attendeeId,
           </button>
           <button
             onClick={() => updateStatus(AttendeeStatus.IDEA)}
-            className={`p-4 rounded-lg text-center ${
+            className={`p-6 rounded-lg text-center text-xl ${
               currentStatus === AttendeeStatus.IDEA
                 ? 'bg-blue-600 text-white'
                 : 'bg-blue-100 hover:bg-blue-200'
@@ -306,7 +251,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meetingId, attendeeId,
           </button>
           <button
             onClick={() => updateStatus(AttendeeStatus.DISAGREE)}
-            className={`p-4 rounded-lg text-center ${
+            className={`p-6 rounded-lg text-center text-xl ${
               currentStatus === AttendeeStatus.DISAGREE
                 ? 'bg-red-600 text-white'
                 : 'bg-red-100 hover:bg-red-200'

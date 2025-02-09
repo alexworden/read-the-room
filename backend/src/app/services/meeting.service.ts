@@ -13,8 +13,25 @@ export class MeetingService {
     private transcriptionRepository: TranscriptionRepository,
   ) {}
 
+  private generateShortId(): string {
+    // Generate 6 random alphanumeric characters (3-3 format)
+    // Note: Database supports up to 12 characters for future extensibility
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    for (let i = 0; i < 6; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    // Insert hyphen after first 3 characters
+    const shortId = `${result.slice(0, 3)}-${result.slice(3)}`;
+    if (shortId.length > 12) {
+      throw new Error('Meeting ID cannot be longer than 12 characters');
+    }
+    return shortId;
+  }
+
   async createMeeting(title: string): Promise<Meeting> {
-    return this.meetingRepository.createMeeting(title);
+    const shortId = this.generateShortId();
+    return await this.meetingRepository.createMeeting(title, shortId);
   }
 
   async getMeeting(id: string): Promise<Meeting | null> {

@@ -65,7 +65,6 @@ const JoinMeetingWrapper = () => {
 
   return meeting ? (
     <JoinMeeting 
-      meetingId={meeting.id} 
       meeting={meeting}
       onJoined={handleJoinedMeeting} 
     />
@@ -91,9 +90,8 @@ const MeetingRoomWrapper = () => {
 
   return meeting && attendee ? (
     <MeetingRoom
-      meetingId={meeting.id}
-      attendeeId={attendee.id}
       meeting={meeting}
+      attendee={attendee}
     />
   ) : null;
 };
@@ -103,7 +101,6 @@ const AppLayout = () => {
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-7xl mx-auto px-4">
-        <h1 className="text-4xl font-bold text-center mb-8">Read The Room</h1>
         <Routes>
           <Route path="/" element={<CreateMeetingWrapper />} />
           <Route path="/join/:meetingId" element={<JoinMeetingWrapper />} />

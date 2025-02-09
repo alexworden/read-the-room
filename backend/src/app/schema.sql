@@ -6,7 +6,7 @@ DROP TABLE IF EXISTS meetings;
 
 -- Create meetings table
 CREATE TABLE meetings (
-  id UUID PRIMARY KEY,
+  id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -16,7 +16,7 @@ CREATE TABLE meetings (
 -- Create attendees table
 CREATE TABLE attendees (
   id UUID PRIMARY KEY,
-  meeting_id UUID NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
+  meeting_id TEXT,
   name TEXT NOT NULL,
   current_status TEXT NOT NULL DEFAULT 'engaged',
   last_seen TIMESTAMPTZ,
@@ -27,7 +27,7 @@ CREATE TABLE attendees (
 -- Create status_updates table
 CREATE TABLE status_updates (
   id UUID PRIMARY KEY,
-  attendee_id UUID NOT NULL REFERENCES attendees(id) ON DELETE CASCADE,
+  attendee_id UUID,
   status TEXT NOT NULL,
   context TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -36,7 +36,7 @@ CREATE TABLE status_updates (
 -- Create transcriptions table
 CREATE TABLE transcriptions (
   id UUID PRIMARY KEY,
-  meeting_id UUID NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
+  meeting_id TEXT,
   text TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -50,18 +50,18 @@ CREATE INDEX idx_transcriptions_meeting_id ON transcriptions(meeting_id);
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
-  NEW.updated_at = NOW();
-  RETURN NEW;
+    NEW.updated_at = NOW();
+    RETURN NEW;
 END;
 $$ language 'plpgsql';
 
--- Create triggers for updated_at
+-- Create triggers
 CREATE TRIGGER update_meetings_updated_at
-  BEFORE UPDATE ON meetings
-  FOR EACH ROW
-  EXECUTE FUNCTION update_updated_at_column();
+    BEFORE UPDATE ON meetings
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_attendees_updated_at
-  BEFORE UPDATE ON attendees
-  FOR EACH ROW
-  EXECUTE FUNCTION update_updated_at_column();
+    BEFORE UPDATE ON attendees
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();

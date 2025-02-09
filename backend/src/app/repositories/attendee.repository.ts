@@ -8,11 +8,6 @@ export class AttendeeRepository {
   constructor(private db: DatabaseService) {}
 
   async createAttendee(meetingId: string, name: string): Promise<Attendee> {
-    if (!isUUID(meetingId)) {
-      throw new Error(`Invalid meeting ID format: ${meetingId}`);
-    }
-
-    // First check if meeting exists
     const meetingResult = await this.db.query(
       'SELECT id FROM meetings WHERE id = $1',
       [meetingId]
@@ -62,10 +57,6 @@ export class AttendeeRepository {
   }
 
   async getMeetingAttendees(meetingId: string): Promise<Attendee[]> {
-    if (!isUUID(meetingId)) {
-      throw new Error(`Invalid meeting ID format: ${meetingId}`);
-    }
-
     const result = await this.db.query<Attendee>(
       'SELECT * FROM attendees WHERE meeting_id = $1',
       [meetingId]

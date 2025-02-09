@@ -7,8 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 export class MeetingRepository {
   constructor(private db: DatabaseService) {}
 
-  async createMeeting(title: string): Promise<Meeting> {
-    const id = uuidv4();
+  async createMeeting(title: string, id: string): Promise<Meeting> {
     const result = await this.db.query<Meeting>(
       'INSERT INTO meetings (id, title) VALUES ($1, $2) RETURNING *',
       [id, title]
@@ -60,11 +59,11 @@ export class MeetingRepository {
 
   async addTranscription(meetingId: string, text: string): Promise<Transcription> {
     const id = uuidv4();
-    const result = await this.db.query<Transcription>(
+    const queryResult = await this.db.query<Transcription>(
       'INSERT INTO transcriptions (id, meeting_id, text) VALUES ($1, $2, $3) RETURNING *',
       [id, meetingId, text]
     );
-    return result.rows[0];
+    return queryResult.rows[0];
   }
 
   async getTranscriptions(meetingId: string): Promise<Transcription[]> {
@@ -116,10 +115,10 @@ export class MeetingRepository {
   }
 
   async addStatusUpdate(attendeeId: string, status: string, context: string): Promise<void> {
-    const id = uuidv4();
+    const statusUpdateId = uuidv4();
     await this.db.query(
       'INSERT INTO status_updates (id, attendee_id, status, context) VALUES ($1, $2, $3, $4)',
-      [id, attendeeId, status, context]
+      [statusUpdateId, attendeeId, status, context]
     );
   }
 
@@ -129,5 +128,12 @@ export class MeetingRepository {
       [attendeeId]
     );
     return result.rows;
+  }
+
+  async updateMeetingId(oldId: string, newId: string): Promise<void> {
+    await this.db.query(
+      'UPDATE meetings SET id = $1 WHERE id = $2',
+      [newId, oldId]
+    );
   }
 }
