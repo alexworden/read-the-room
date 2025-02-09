@@ -1,64 +1,62 @@
 import { Injectable } from '@nestjs/common';
-import { Meeting, Attendee, AttendeeStatus } from '../types/meeting.types';
+import { Meeting } from '../types/meeting.types';
+
+interface MeetingState {
+  attendees: Set<string>;
+}
 
 @Injectable()
 export class MeetingStateService {
-  private meetings: Map<string, Meeting> = new Map();
-  private heartbeats: Map<string, Map<string, Date>> = new Map(); // meetingId -> (attendeeId -> lastHeartbeat)
+  private meetings = new Map<string, Meeting>();
+  private heartbeats = new Map<string, Map<string, string>>();
+  private attendees = new Map<string, MeetingState>();
 
   createMeeting(meeting: Meeting): void {
     this.meetings.set(meeting.id, meeting);
     this.heartbeats.set(meeting.id, new Map());
+    this.attendees.set(meeting.id, { attendees: new Set() });
   }
 
-  getMeeting(meetingId: string): Meeting | undefined {
-    return this.meetings.get(meetingId);
+  getMeeting(id: string): Meeting | undefined {
+    return this.meetings.get(id);
   }
 
-  getMeetings(): Map<string, Meeting> {
-    return this.meetings;
+  removeMeeting(id: string): void {
+    this.meetings.delete(id);
+    this.heartbeats.delete(id);
+    this.attendees.delete(id);
   }
 
-  updateMeeting(meetingId: string, meeting: Meeting): void {
-    this.meetings.set(meetingId, meeting);
-  }
-
-  setLastHeartbeat(meetingId: string, attendeeId: string, timestamp: Date): void {
-    if (!this.heartbeats.has(meetingId)) {
-      this.heartbeats.set(meetingId, new Map());
+  setLastHeartbeat(meetingId: string, attendeeId: string, timestamp: string): void {
+    let meetingHeartbeats = this.heartbeats.get(meetingId);
+    if (!meetingHeartbeats) {
+      meetingHeartbeats = new Map();
+      this.heartbeats.set(meetingId, meetingHeartbeats);
     }
-    this.heartbeats.get(meetingId)?.set(attendeeId, timestamp);
+    meetingHeartbeats.set(attendeeId, timestamp);
   }
 
-  getLastHeartbeat(meetingId: string, attendeeId: string): Date | undefined {
+  getLastHeartbeat(meetingId: string, attendeeId: string): string | undefined {
     return this.heartbeats.get(meetingId)?.get(attendeeId);
   }
 
+  addAttendee(meetingId: string, attendeeId: string): void {
+    if (!this.attendees.has(meetingId)) {
+      this.attendees.set(meetingId, { attendees: new Set() });
+    }
+    this.attendees.get(meetingId).attendees.add(attendeeId);
+  }
+
   removeAttendee(meetingId: string, attendeeId: string): void {
-    const meeting = this.meetings.get(meetingId);
-    if (meeting) {
-      meeting.attendees = meeting.attendees.filter(a => a.id !== attendeeId);
-      this.meetings.set(meetingId, meeting);
-      
-      // Clean up heartbeat
-      const heartbeats = this.heartbeats.get(meetingId);
-      if (heartbeats) {
-        heartbeats.delete(attendeeId);
-      }
+    if (this.attendees.has(meetingId)) {
+      this.attendees.get(meetingId).attendees.delete(attendeeId);
     }
   }
 
-  updateAttendeeHeartbeat(meetingId: string, attendeeId: string) {
-    const meeting = this.getMeeting(meetingId);
-    if (meeting) {
-      const attendee = meeting.attendees.find(a => a.id === attendeeId);
-      if (attendee) {
-        attendee.lastSeen = new Date();
-      }
+  getMeetingAttendees(meetingId: string): string[] {
+    if (!this.attendees.has(meetingId)) {
+      return [];
     }
-  }
-
-  broadcastToMeeting(meetingId: string, data: any): void {
-    // This will be implemented by the WebSocket gateway
+    return Array.from(this.attendees.get(meetingId).attendees);
   }
 }

@@ -26,6 +26,7 @@ A real-time meeting engagement tracking application that uses AI to transcribe c
 
 - Node.js (v18 or later)
 - npm package manager
+- PostgreSQL installed and running
 - OpenAI API key (for transcription features)
 - NX workspace CLI (`npm install -g nx`)
 
@@ -40,7 +41,17 @@ A real-time meeting engagement tracking application that uses AI to transcribe c
    source ~/.zshrc
    ```
 
-2. Environment Variables
+2. Database Setup
+   ```bash
+   # Install PostgreSQL if not already installed
+   brew install postgresql@15
+   brew services start postgresql@15
+
+   # Run the database setup script
+   ./scripts/setup-db.sh
+   ```
+
+3. Environment Variables
    ```bash
    # Copy the example environment file
    cp .env.example .env

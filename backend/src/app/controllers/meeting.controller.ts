@@ -1,151 +1,85 @@
-import {
-  Controller,
-  Post,
-  Get,
-  Put,
-  Body,
-  Param,
-  NotFoundException,
-  BadRequestException,
-  UseInterceptors,
-  UploadedFile,
-  Logger,
-} from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, Param, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { MeetingService } from '../services/meeting.service';
-import { Meeting, Attendee, AttendeeStatus } from '../types/meeting.types';
 import { TranscriptionService } from '../services/transcription.service';
 import { QRService } from '../services/qr.service';
+import { Meeting, Attendee, MeetingStats } from '../types/meeting.types';
 
 @Controller('meetings')
 export class MeetingController {
   constructor(
     private readonly meetingService: MeetingService,
     private readonly transcriptionService: TranscriptionService,
-    private readonly qrService: QRService
+    private readonly qrService: QRService,
   ) {}
 
   @Post()
   async createMeeting(@Body('title') title: string): Promise<Meeting> {
-    try {
-      Logger.log(`Received request to create meeting with title: ${title}`);
-      Logger.log(`Request body:`, JSON.stringify({ title }));
-      
-      if (!title) {
-        Logger.error('Title is required for creating a meeting');
-        throw new BadRequestException('Title is required');
-      }
-      
-      Logger.log(`Creating meeting with title: ${title}`);
-      const meeting = this.meetingService.createMeeting(title);
-      Logger.log(`Created meeting:`, JSON.stringify(meeting));
-      
-      Logger.log(`Generating QR code for meeting: ${meeting.id}`);
-      const qrCode = await this.qrService.generateMeetingQR(meeting.id);
-      Logger.log(`Generated QR code successfully`);
-      
-      const response = { ...meeting, qrCode };
-      Logger.log(`Sending response:`, JSON.stringify(response));
-      return response;
-    } catch (error) {
-      Logger.error(`Error creating meeting:`, {
-        error: error.message,
-        stack: error.stack,
-        title,
-      });
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
-      throw new BadRequestException(error.message);
-    }
+    return await this.meetingService.createMeeting(title);
   }
 
   @Get(':id')
-  getMeeting(@Param('id') id: string): Meeting {
-    const meeting = this.meetingService.getMeeting(id);
+  async getMeeting(@Param('id') id: string): Promise<Meeting> {
+    const meeting = await this.meetingService.getMeeting(id);
     if (!meeting) {
-      throw new NotFoundException('Meeting not found');
+      throw new Error(`Meeting with ID ${id} not found`);
     }
     return meeting;
   }
 
   @Get(':id/qr')
-  getQRCode(@Param('id') id: string) {
-    return this.qrService.generateMeetingQR(id);
+  async getMeetingQR(@Param('id') id: string): Promise<{ qrCode: string }> {
+    const qrCode = await this.qrService.generateMeetingQR(id);
+    return { qrCode };
+  }
+
+  @Get(':id/attendees')
+  async getMeetingAttendees(@Param('id') id: string): Promise<Attendee[]> {
+    return await this.meetingService.getMeetingAttendees(id);
   }
 
   @Get(':id/stats')
-  getStats(@Param('id') meetingId: string) {
-    try {
-      return this.meetingService.getMeetingStats(meetingId);
-    } catch (error) {
-      throw new NotFoundException(error.message);
+  async getMeetingStats(@Param('id') id: string): Promise<MeetingStats> {
+    return await this.meetingService.getMeetingStats(id);
+  }
+
+  @Get(':meetingId/attendees/:attendeeId')
+  async getAttendee(
+    @Param('meetingId') meetingId: string,
+    @Param('attendeeId') attendeeId: string,
+  ): Promise<Attendee> {
+    const attendee = await this.meetingService.getAttendee(attendeeId);
+    if (!attendee || attendee.meeting_id !== meetingId) {
+      throw new Error(`Attendee ${attendeeId} not found in meeting ${meetingId}`);
     }
+    return attendee;
   }
 
   @Post(':id/attendees')
-  addAttendee(
+  async addAttendee(
     @Param('id') meetingId: string,
-    @Body('name') name: string
-  ): Attendee {
-    try {
-      return this.meetingService.addAttendee(meetingId, name);
-    } catch (error) {
-      throw new NotFoundException(error.message);
-    }
+    @Body('name') name: string,
+  ): Promise<Attendee> {
+    return await this.meetingService.addAttendee(meetingId, name);
   }
 
-  @Put(':id/attendees/:attendeeId/heartbeat')
-  updateHeartbeat(
-    @Param('id') meetingId: string,
-    @Param('attendeeId') attendeeId: string
-  ) {
-    try {
-      this.meetingService.updateAttendeeStatus(
-        meetingId,
-        attendeeId,
-        AttendeeStatus.ENGAGED
-      );
-      return { success: true };
-    } catch (error) {
-      throw new NotFoundException(error.message);
-    }
-  }
-
-  @Put(':id/attendees/:attendeeId/status')
-  updateAttendeeStatus(
-    @Param('id') meetingId: string,
+  @Put(':meetingId/attendees/:attendeeId/status')
+  async updateAttendeeStatus(
+    @Param('meetingId') meetingId: string,
     @Param('attendeeId') attendeeId: string,
-    @Body() body: { status: AttendeeStatus }
-  ) {
-    try {
-      this.meetingService.updateAttendeeStatus(meetingId, attendeeId, body.status);
-      return { success: true };
-    } catch (error) {
-      throw new NotFoundException(error.message);
-    }
+    @Body('status') status: string,
+  ): Promise<Attendee> {
+    await this.meetingService.updateAttendeeStatus(attendeeId, status);
+    return await this.meetingService.getAttendee(attendeeId);
   }
 
-  @Post(':id/transcription')
-  addTranscription(
-    @Param('id') meetingId: string,
-    @Body() transcriptionData: { text: string }
-  ) {
-    this.meetingService.addTranscription(meetingId, transcriptionData.text);
-    return { success: true };
-  }
-
-  @Post(':id/audio')
+  @Post(':id/transcriptions')
   @UseInterceptors(FileInterceptor('audio'))
-  async uploadAudio(
-    @Param('id') id: string,
-    @UploadedFile() file: { buffer: Buffer }
-  ) {
-    try {
-      await this.transcriptionService.transcribeAudio(id, file.buffer);
-      return { message: 'Audio transcribed successfully' };
-    } catch (error) {
-      throw new NotFoundException(error.message);
-    }
+  async uploadTranscription(
+    @Param('id') meetingId: string,
+    @Body('attendeeId') attendeeId: string,
+    @Body('text') text: string,
+  ): Promise<void> {
+    await this.transcriptionService.processTranscription(meetingId, attendeeId, text);
   }
 }

@@ -1,25 +1,19 @@
 import { Injectable } from '@nestjs/common';
 import { MeetingGateway } from '../gateways/meeting.gateway';
-import { MeetingStateService } from './meeting-state.service';
+import { MeetingStats } from '../types/meeting.types';
 
 @Injectable()
 export class EventsService {
-  constructor(
-    private readonly meetingGateway: MeetingGateway,
-    private readonly meetingStateService: MeetingStateService
-  ) {}
+  constructor(private readonly meetingGateway: MeetingGateway) {}
 
-  onTranscriptionReceived(meetingId: string, text: string) {
-    this.meetingGateway.broadcastToMeeting(meetingId, 'transcription', {
-      type: 'transcription',
+  emitTranscription(meetingId: string, attendeeId: string, text: string): void {
+    this.meetingGateway.server.to(meetingId).emit('transcription', {
+      attendeeId,
       text,
     });
   }
 
-  onStatsUpdated(meetingId: string, stats: Record<string, number>) {
-    this.meetingGateway.broadcastToMeeting(meetingId, 'stats', {
-      type: 'stats',
-      stats,
-    });
+  emitMeetingStats(meetingId: string, stats: MeetingStats): void {
+    this.meetingGateway.server.to(meetingId).emit('stats', stats);
   }
 }

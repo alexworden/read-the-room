@@ -24,6 +24,14 @@ export const CreateMeeting: React.FC<CreateMeetingProps> = ({ onMeetingCreated }
       if (response.ok) {
         const meeting = await response.json();
         console.log('Meeting created successfully:', meeting);
+
+        // Fetch QR code
+        const qrResponse = await fetch(`/api/meetings/${meeting.id}/qr`);
+        if (qrResponse.ok) {
+          const { qrCode } = await qrResponse.json();
+          meeting.qrCode = qrCode;
+        }
+
         onMeetingCreated(meeting);
         setTitle('');
       } else {
@@ -58,7 +66,7 @@ export const CreateMeeting: React.FC<CreateMeetingProps> = ({ onMeetingCreated }
         </div>
         <button
           type="submit"
-          className="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+          className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
         >
           Create Meeting
         </button>

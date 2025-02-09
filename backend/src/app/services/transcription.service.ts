@@ -1,58 +1,70 @@
-import { Injectable, Logger } from '@nestjs/common';
-import OpenAI from 'openai';
+import { Injectable } from '@nestjs/common';
 import { MeetingService } from './meeting.service';
+import OpenAI from 'openai';
 
 @Injectable()
 export class TranscriptionService {
-  private readonly openai: OpenAI;
-  private readonly logger = new Logger(TranscriptionService.name);
+  private openai: OpenAI;
 
-  constructor(private readonly meetingService: MeetingService) {
+  constructor(
+    private meetingService: MeetingService,
+  ) {
     const apiKey = process.env.READ_THE_ROOM_OPENAI_KEY;
-    
     if (!apiKey) {
-      const errorMessage = [
-        '\n🚫 OpenAI API key not found!',
-        '⚠️  Please set the READ_THE_ROOM_OPENAI_KEY environment variable.',
-        '',
-        '📝 Add this to your ~/.zshrc file:',
-        '   export READ_THE_ROOM_OPENAI_KEY=your_openai_api_key_here',
-        '',
-        '✨ Then reload your shell:',
-        '   source ~/.zshrc',
-        '',
-      ].join('\n');
-      
-      this.logger.error(errorMessage);
       throw new Error('OpenAI API key not found in environment variables');
     }
 
     this.openai = new OpenAI({
       apiKey,
     });
-    this.logger.log('TranscriptionService initialized with OpenAI configuration');
   }
 
-  async transcribeAudio(meetingId: string, audioBuffer: Buffer): Promise<void> {
+  async processTranscription(meetingId: string, attendeeId: string, text: string): Promise<void> {
+    // Save the transcription
+    await this.meetingService.addTranscription(meetingId, text);
+
+    // Analyze sentiment and update attendee status
+    const status = await this.analyzeTranscription(text);
+    if (status) {
+      await this.meetingService.updateAttendeeStatus(attendeeId, status, text);
+    }
+  }
+
+  private async analyzeTranscription(text: string): Promise<string | null> {
     try {
-      // Create a temporary file from the buffer
-      const tempFile = new File([audioBuffer], 'audio.wav', { 
-        type: 'audio/wav', 
-        lastModified: Date.now() 
+      const response = await this.openai.chat.completions.create({
+        model: 'gpt-3.5-turbo',
+        messages: [
+          {
+            role: 'system',
+            content: `You are an AI that analyzes meeting transcriptions to determine the speaker's state. 
+            Return ONLY ONE of these states: engaged, confused, idea, disagree. 
+            If none apply, return null.
+            
+            Examples:
+            "I have a suggestion" -> idea
+            "I don't understand" -> confused
+            "I disagree with that approach" -> disagree
+            "That makes sense" -> engaged
+            "The weather is nice" -> null`,
+          },
+          {
+            role: 'user',
+            content: text,
+          },
+        ],
+        temperature: 0,
+        max_tokens: 10,
       });
 
-      // Send to OpenAI's API
-      const response = await this.openai.audio.transcriptions.create({
-        file: tempFile,
-        model: 'whisper-1',
-      });
-
-      // Update the meeting with the transcription
-      const transcription = response.text;
-      await this.meetingService.addTranscription(meetingId, transcription);
+      const result = response.choices[0]?.message?.content?.toLowerCase();
+      if (result && ['engaged', 'confused', 'idea', 'disagree'].includes(result)) {
+        return result;
+      }
+      return null;
     } catch (error) {
-      this.logger.error('Error transcribing audio:', error.message);
-      throw error;
+      console.error('Error analyzing transcription:', error);
+      return null;
     }
   }
 }
