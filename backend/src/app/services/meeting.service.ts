@@ -71,7 +71,7 @@ export class MeetingService {
     return this.qrService.generateQRCode(meetingId);
   }
 
-  async getMeetingStats(meetingId: string): Promise<Record<string, number>> {
+  async getMeetingStats(meetingId: string): Promise<MeetingStats> {
     this.logger.log(`Fetching stats for meeting ${meetingId}`);
     try {
       const attendees = await this.meetingRepository.getAttendees(meetingId);
