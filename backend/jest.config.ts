@@ -1,10 +1,22 @@
-export default {
-  displayName: 'backend',
-  preset: '../jest.preset.js',
+import type { Config } from 'jest';
+import * as path from 'path';
+
+const config: Config = {
+  moduleFileExtensions: ['js', 'json', 'ts'],
+  rootDir: path.join(__dirname, 'src'),
   testEnvironment: 'node',
+  testRegex: '.*\\.spec\\.ts$',
   transform: {
-    '^.+\\.[tj]s$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.spec.json' }],
+    '^.+\\.(t|j)s$': [
+      'ts-jest',
+      {
+        tsconfig: '<rootDir>/../tsconfig.test.json'
+      }
+    ]
   },
-  moduleFileExtensions: ['ts', 'js', 'html'],
-  coverageDirectory: '../coverage/backend',
+  collectCoverageFrom: ['**/*.(t|j)s'],
+  coverageDirectory: '../coverage',
+  testPathIgnorePatterns: ['/node_modules/', '/dist/']
 };
+
+export default config;

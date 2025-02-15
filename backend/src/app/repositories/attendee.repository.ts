@@ -1,13 +1,22 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../services/database.service';
-import { Attendee } from '../types/meeting.types';
+import { Attendee, AttendeeCurrentStatus } from '../types/meeting.types';
 import { v4 as uuidv4, validate as isUUID } from 'uuid';
 
 @Injectable()
 export class AttendeeRepository {
   constructor(private db: DatabaseService) {}
 
-  async createAttendee(meetingId: string, name: string): Promise<Attendee> {
+  async createAttendee(name: string): Promise<Attendee> {
+    const id = uuidv4();
+    const result = await this.db.query<Attendee>(
+      'INSERT INTO attendees (id, name) VALUES ($1, $2) RETURNING *',
+      [id, name]
+    );
+    return result.rows[0];
+  }
+
+  async addAttendeeToMeeting(attendeeId: string, meetingId: string): Promise<AttendeeCurrentStatus> {
     const meetingResult = await this.db.query(
       'SELECT id FROM meetings WHERE id = $1',
       [meetingId]
@@ -18,9 +27,12 @@ export class AttendeeRepository {
     }
 
     const id = uuidv4();
-    const result = await this.db.query<Attendee>(
-      'INSERT INTO attendees (id, name, meeting_id) VALUES ($1, $2, $3) RETURNING *',
-      [id, name, meetingId]
+    const result = await this.db.query<AttendeeCurrentStatus>(
+      'INSERT INTO attendee_current_status (id, attendee_id, meeting_id, status, last_heartbeat) ' +
+      'VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP) ' +
+      'ON CONFLICT (attendee_id, meeting_id) DO UPDATE SET last_heartbeat = CURRENT_TIMESTAMP ' +
+      'RETURNING *',
+      [id, attendeeId, meetingId, 'engaged']
     );
     return result.rows[0];
   }
@@ -37,30 +49,54 @@ export class AttendeeRepository {
     return result.rows[0] || null;
   }
 
-  async updateAttendeeStatus(id: string, status: string): Promise<void> {
-    if (!isUUID(id)) {
-      throw new Error(`Invalid attendee ID format: ${id}`);
+  async updateAttendeeStatus(attendeeId: string, meetingId: string, status: string): Promise<void> {
+    if (!isUUID(attendeeId)) {
+      throw new Error(`Invalid attendee ID format: ${attendeeId}`);
     }
 
     const result = await this.db.query(
-      'UPDATE attendees SET current_status = $1, last_seen = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-      [status, id]
+      'UPDATE attendee_current_status SET status = $1, last_heartbeat = CURRENT_TIMESTAMP ' +
+      'WHERE attendee_id = $2 AND meeting_id = $3',
+      [status, attendeeId, meetingId]
     );
 
     if (result.rowCount === 0) {
-      throw new Error(`Attendee with ID ${id} not found`);
+      throw new Error(`Attendee ${attendeeId} not found in meeting ${meetingId}`);
     }
+  }
+
+  async updateAttendeeHeartbeat(attendeeId: string, meetingId: string): Promise<void> {
+    const result = await this.db.query(
+      'UPDATE attendee_current_status SET last_heartbeat = CURRENT_TIMESTAMP ' +
+      'WHERE attendee_id = $1 AND meeting_id = $2',
+      [attendeeId, meetingId]
+    );
+
+    if (result.rowCount === 0) {
+      throw new Error(`Attendee ${attendeeId} not found in meeting ${meetingId}`);
+    }
+  }
+
+  async getMeetingAttendees(meetingId: string): Promise<(Attendee & { current_status: string })[]> {
+    const result = await this.db.query(
+      'SELECT a.*, acs.status as current_status ' +
+      'FROM attendees a ' +
+      'JOIN attendee_current_status acs ON a.id = acs.attendee_id ' +
+      'WHERE acs.meeting_id = $1',
+      [meetingId]
+    );
+    return result.rows;
+  }
+
+  async getAttendeeCurrentStatus(attendeeId: string, meetingId: string): Promise<AttendeeCurrentStatus | null> {
+    const result = await this.db.query<AttendeeCurrentStatus>(
+      'SELECT * FROM attendee_current_status WHERE attendee_id = $1 AND meeting_id = $2',
+      [attendeeId, meetingId]
+    );
+    return result.rows[0] || null;
   }
 
   async deleteAttendee(id: string): Promise<void> {
     await this.db.query('DELETE FROM attendees WHERE id = $1', [id]);
-  }
-
-  async getMeetingAttendees(meetingId: string): Promise<Attendee[]> {
-    const result = await this.db.query<Attendee>(
-      'SELECT * FROM attendees WHERE meeting_id = $1',
-      [meetingId]
-    );
-    return result.rows;
   }
 }

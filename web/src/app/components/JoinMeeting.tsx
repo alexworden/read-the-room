@@ -15,7 +15,7 @@ export const JoinMeeting: React.FC<JoinMeetingProps> = ({ meeting, onJoined }) =
     e.preventDefault();
 
     try {
-      const response = await fetch(`/api/meetings/${meeting.id}/attendees`, {
+      const response = await fetch(`http://localhost:3000/api/meetings/${meeting.id}/attendees`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

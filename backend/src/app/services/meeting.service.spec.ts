@@ -4,9 +4,9 @@ import { DatabaseService } from './database.service';
 import { TestDatabaseService } from './test-database.service';
 import { MeetingRepository } from '../repositories/meeting.repository';
 import { AttendeeRepository } from '../repositories/attendee.repository';
-import { TranscriptionRepository } from '../repositories/transcription.repository';
-import { Meeting, Attendee, StatusUpdate } from '../types/meeting.types';
+import { Meeting, Attendee, StatusUpdate, AttendeeCurrentStatus } from '../types/meeting.types';
 import { v4 as uuidv4 } from 'uuid';
+import { QRService } from './qr.service';
 
 describe('MeetingService', () => {
   let service: MeetingService;
@@ -21,7 +21,7 @@ describe('MeetingService', () => {
         MeetingService,
         MeetingRepository,
         AttendeeRepository,
-        TranscriptionRepository,
+        QRService,
         {
           provide: DatabaseService,
           useValue: dbService,
@@ -37,7 +37,7 @@ describe('MeetingService', () => {
   });
 
   beforeEach(async () => {
-    await dbService.query('TRUNCATE meetings, attendees, status_updates, transcriptions CASCADE');
+    await dbService.query('TRUNCATE meetings, attendees, attendee_current_status, status_updates CASCADE');
   });
 
   it('should be defined', () => {
@@ -45,55 +45,67 @@ describe('MeetingService', () => {
   });
 
   describe('createMeeting', () => {
-    it('should create a meeting', async () => {
+    it('should create a meeting with a unique human-readable ID', async () => {
       const title = 'Test Meeting';
       const meeting = await service.createMeeting(title);
 
       expect(meeting).toBeDefined();
       expect(meeting.title).toBe(title);
-      expect(meeting.id).toMatch(/^[a-z0-9]{3}-[a-z0-9]{3}$/);
+      expect(meeting.meeting_id).toMatch(/^[A-Z0-9]{3}-[A-Z0-9]{3}-[A-Z0-9]{3}$/);
+    });
+
+    it('should throw error if meeting ID already exists', async () => {
+      const title = 'Test Meeting';
+      const meeting = await service.createMeeting(title);
+      
+      // Mock generateMeetingId to return the same ID
+      jest.spyOn(service as any, 'generateMeetingId').mockReturnValue(meeting.meeting_id);
+      
+      await expect(service.createMeeting(title)).rejects.toThrow('Meeting ID already exists');
     });
   });
 
   describe('addAttendee', () => {
     it('should add an attendee to a meeting', async () => {
       const meeting = await service.createMeeting('Test Meeting');
-      const name = 'John Doe';
-
-      const attendee = await service.addAttendee(meeting.id, name);
+      const attendee = await service.addAttendee(meeting.meeting_id, 'John');
 
       expect(attendee).toBeDefined();
-      expect(attendee.name).toBe(name);
-      expect(attendee.meeting_id).toBe(meeting.id);
+      expect(attendee.name).toBe('John');
+      expect(attendee.meeting_id).toBe(meeting.meeting_id);
     });
 
     it('should throw error if meeting does not exist', async () => {
-      const nonExistentId = 'xxx-yyy';
-      await expect(service.addAttendee(nonExistentId, 'John Doe')).rejects.toThrow();
+      await expect(service.addAttendee('non-existent-meeting', 'John'))
+        .rejects.toThrow('Meeting not found');
     });
   });
 
   describe('updateAttendeeStatus', () => {
     it('should update attendee status', async () => {
       const meeting = await service.createMeeting('Test Meeting');
-      const attendee = await service.addAttendee(meeting.id, 'John Doe');
-      const newStatus = 'confused';
+      const attendee = await service.addAttendee(meeting.meeting_id, 'John');
 
-      await service.updateAttendeeStatus(attendee.id, newStatus);
+      await service.updateAttendeeStatus(attendee.id, meeting.meeting_id, 'confused');
+      const status = await service.getAttendee(attendee.id);
+      expect(status?.currentStatus).toBe('confused');
+    });
 
-      const updatedAttendee = await service.getAttendee(attendee.id);
-      expect(updatedAttendee?.current_status).toBe(newStatus);
+    it('should throw error if attendee not in meeting', async () => {
+      const meeting = await service.createMeeting('Test Meeting');
+      await expect(service.updateAttendeeStatus('non-existent-attendee', meeting.meeting_id, 'confused'))
+        .rejects.toThrow('Attendee not found in meeting');
     });
   });
 
   describe('getMeetingStats', () => {
     it('should return correct meeting stats', async () => {
       const meeting = await service.createMeeting('Test Meeting');
-      await service.addAttendee(meeting.id, 'John');
-      await service.addAttendee(meeting.id, 'Jane');
-      await service.addAttendee(meeting.id, 'Bob');
+      await service.addAttendee(meeting.meeting_id, 'John');
+      await service.addAttendee(meeting.meeting_id, 'Jane');
+      await service.addAttendee(meeting.meeting_id, 'Bob');
 
-      const stats = await service.getMeetingStats(meeting.id);
+      const stats = await service.getMeetingStats(meeting.meeting_id);
 
       expect(stats).toBeDefined();
       expect(stats.total).toBe(3);
@@ -101,6 +113,32 @@ describe('MeetingService', () => {
       expect(stats.confused).toBe(0);
       expect(stats.idea).toBe(0);
       expect(stats.disagree).toBe(0);
+    });
+
+    it('should update stats correctly when attendee status changes', async () => {
+      // Create meeting and add attendee
+      const meeting = await service.createMeeting('Test Meeting');
+      const attendee = await service.addAttendee(meeting.meeting_id, 'John');
+
+      // Initial stats - should be engaged
+      let stats = await service.getMeetingStats(meeting.meeting_id);
+      expect(stats.total).toBe(1);
+      expect(stats.engaged).toBe(1);
+      expect(stats.confused).toBe(0);
+
+      // Update to confused
+      await service.updateAttendeeStatus(attendee.id, meeting.meeting_id, 'confused');
+      stats = await service.getMeetingStats(meeting.meeting_id);
+      expect(stats.total).toBe(1);
+      expect(stats.engaged).toBe(0);
+      expect(stats.confused).toBe(1);
+
+      // Update back to engaged
+      await service.updateAttendeeStatus(attendee.id, meeting.meeting_id, 'engaged');
+      stats = await service.getMeetingStats(meeting.meeting_id);
+      expect(stats.total).toBe(1);
+      expect(stats.engaged).toBe(1);
+      expect(stats.confused).toBe(0);
     });
   });
 });

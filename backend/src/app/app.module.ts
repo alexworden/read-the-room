@@ -7,10 +7,8 @@ import { MeetingStateService } from './services/meeting-state.service';
 import { DatabaseService } from './services/database.service';
 import { MeetingGateway } from './gateways/meeting.gateway';
 import { EventsService } from './services/events.service';
-import { TranscriptionService } from './services/transcription.service';
 import { MeetingRepository } from './repositories/meeting.repository';
 import { AttendeeRepository } from './repositories/attendee.repository';
-import { TranscriptionRepository } from './repositories/transcription.repository';
 import { QRService } from './services/qr.service';
 import { ConfigModule } from '@nestjs/config';
 
@@ -28,12 +26,10 @@ import { ConfigModule } from '@nestjs/config';
     DatabaseService,
     MeetingGateway,
     EventsService,
-    TranscriptionService,
     MeetingRepository,
     AttendeeRepository,
-    TranscriptionRepository,
     QRService,
   ],
-  exports: [MeetingService, TranscriptionService],
+  exports: [MeetingService],
 })
 export class AppModule {}

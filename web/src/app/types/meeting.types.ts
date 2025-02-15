@@ -1,18 +1,19 @@
 export enum AttendeeStatus {
-  ENGAGED = 'ENGAGED',
-  CONFUSED = 'CONFUSED',
-  IDEA = 'IDEA',
-  DISAGREE = 'DISAGREE'
+  ENGAGED = 'engaged',
+  CONFUSED = 'confused',
+  IDEA = 'idea',
+  DISAGREE = 'disagree'
 }
 
 export interface Meeting {
   id: string;
+  uuid: string;
   title: string;
   createdAt: string;
   updatedAt: string;
-  transcription: string[];
-  attendees: Attendee[];
   qrCode?: string;
+  transcription?: string[];
+  attendees?: Attendee[];
 }
 
 export interface Attendee {

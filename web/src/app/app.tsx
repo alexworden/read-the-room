@@ -21,58 +21,73 @@ const JoinMeetingWrapper = () => {
   const { meetingId } = useParams();
   const navigate = useNavigate();
   const [meeting, setMeeting] = useState<Meeting | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchMeetingData = async () => {
+      // Reset error state on each attempt
+      setError(null);
+      
+      // If no meetingId is provided or if it's "undefined", redirect to home
+      if (!meetingId || meetingId === 'undefined') {
+        setError('Invalid meeting ID');
+        navigate('/');
+        return;
+      }
+
       try {
         // Fetch meeting details
-        const meetingResponse = await fetch(`/api/meetings/${meetingId}`);
+        const meetingResponse = await fetch(`http://localhost:3000/api/meetings/${meetingId}`);
         if (!meetingResponse.ok) {
-          navigate('/');
-          return;
+          throw new Error(`Failed to fetch meeting: ${meetingResponse.statusText}`);
         }
         const meetingData = await meetingResponse.json();
 
-        // Fetch QR code
-        const qrResponse = await fetch(`/api/meetings/${meetingId}/qr`);
-        if (!qrResponse.ok) {
-          navigate('/');
-          return;
-        }
-        const { qrCode } = await qrResponse.json();
-        
-        // Combine meeting data with QR code
-        setMeeting({
-          ...meetingData,
-          qrCode
-        });
+        // Convert snake_case to camelCase
+        const meeting: Meeting = {
+          id: meetingData.meeting_id,
+          uuid: meetingData.meeting_uuid,
+          title: meetingData.title,
+          createdAt: meetingData.created_at,
+          updatedAt: meetingData.updated_at,
+          qrCode: meetingData.qr_code
+        };
+
+        setMeeting(meeting);
       } catch (error) {
-        console.error('Failed to fetch meeting data:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Failed to fetch meeting data';
+        setError(errorMessage);
+        console.error(errorMessage);
         navigate('/');
       }
     };
 
-    if (meetingId) {
-      fetchMeetingData();
-    }
+    fetchMeetingData();
   }, [meetingId, navigate]);
 
-  const handleJoinedMeeting = (attendee: Attendee) => {
-    if (meeting) {
-      navigate(`/room/${meeting.id}`, { state: { meeting, attendee } });
-    }
-  };
+  // Show error state if there's an error
+  if (error) {
+    return (
+      <div className="text-center p-8 text-red-600">
+        <p>Error: {error}</p>
+        <button 
+          onClick={() => navigate('/')}
+          className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+        >
+          Return to Home
+        </button>
+      </div>
+    );
+  }
 
-  return meeting ? (
-    <JoinMeeting 
-      meeting={meeting}
-      onJoined={handleJoinedMeeting} 
-    />
-  ) : (
-    <div className="flex justify-center items-center min-h-[200px]">
-      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
-    </div>
-  );
+  // Show loading state while fetching meeting data
+  if (!meeting) {
+    return <div className="text-center p-8">Loading...</div>;
+  }
+
+  return <JoinMeeting meeting={meeting} onJoined={(attendee) => {
+    navigate(`/room/${meeting.id}`, { state: { meeting, attendee } });
+  }} />;
 };
 
 // Wrapper component for MeetingRoom to handle state

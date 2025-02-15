@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Pool } from 'pg';
+import { Pool, PoolClient } from 'pg';
 import { DatabaseService } from './database.service';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -24,19 +24,22 @@ export class TestDatabaseService extends DatabaseService {
   }
 
   async setupTestDatabase(): Promise<void> {
+    const client = await this.testPool.connect();
     try {
       // Apply schema to test database
       const schemaPath = path.join(__dirname, '..', 'schema.sql');
       const schema = fs.readFileSync(schemaPath, 'utf8');
-      await this.testPool.query(schema);
+      await client.query(schema);
 
       // Truncate all tables
-      await this.testPool.query(`
-        TRUNCATE TABLE meetings, attendees, status_updates, transcriptions CASCADE;
+      await this.query(`
+        TRUNCATE TABLE meetings, attendees, status_updates, attendee_current_status CASCADE;
       `);
     } catch (error) {
       console.error('Error setting up test database:', error);
       throw error;
+    } finally {
+      client.release();
     }
   }
 
@@ -44,7 +47,7 @@ export class TestDatabaseService extends DatabaseService {
     await this.testPool.end();
   }
 
-  async getClient() {
+  async getClient(): Promise<PoolClient> {
     return this.testPool.connect();
   }
 
@@ -52,6 +55,21 @@ export class TestDatabaseService extends DatabaseService {
     const client = await this.getClient();
     try {
       return await client.query(sql, params);
+    } finally {
+      client.release();
+    }
+  }
+
+  async transaction<T>(callback: (client: PoolClient) => Promise<T>): Promise<T> {
+    const client = await this.getClient();
+    try {
+      await client.query('BEGIN');
+      const result = await callback(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
     } finally {
       client.release();
     }

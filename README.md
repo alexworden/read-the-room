@@ -144,7 +144,7 @@ The web application is built with React and uses Socket.IO for real-time communi
    npm install
    ```
 
-3. Start the development server:
+3. Start the development server from the root directory:
    ```bash
    npx nx serve web
    ```

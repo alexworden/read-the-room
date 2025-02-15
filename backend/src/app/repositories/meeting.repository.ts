@@ -1,77 +1,86 @@
 import { Injectable } from '@nestjs/common';
+import { Meeting, Attendee, StatusUpdate, MeetingStats } from '../types/meeting.types';
 import { DatabaseService } from '../services/database.service';
-import { Meeting, Attendee, StatusUpdate, Transcription } from '../types/meeting.types';
 import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class MeetingRepository {
   constructor(private db: DatabaseService) {}
 
-  async createMeeting(title: string, id: string): Promise<Meeting> {
+  async createMeeting(title: string, meetingUuid: string, meetingId: string): Promise<Meeting> {
+    // Check if meeting_id already exists
+    const existingMeeting = await this.db.query<Meeting>(
+      'SELECT * FROM meetings WHERE meeting_id = $1',
+      [meetingId]
+    );
+    if (existingMeeting.rows.length > 0) {
+      throw new Error('Meeting ID already exists');
+    }
+
     const result = await this.db.query<Meeting>(
-      'INSERT INTO meetings (id, title) VALUES ($1, $2) RETURNING *',
-      [id, title]
+      'INSERT INTO meetings (meeting_uuid, meeting_id, title, created_at, updated_at) VALUES ($1, $2, $3, NOW(), NOW()) RETURNING *',
+      [meetingUuid, meetingId, title]
     );
     return result.rows[0];
   }
 
-  async getMeeting(id: string): Promise<Meeting | null> {
+  async getMeeting(meetingId: string): Promise<Meeting | null> {
     const result = await this.db.query<Meeting>(
-      'SELECT * FROM meetings WHERE id = $1',
-      [id]
+      'SELECT * FROM meetings WHERE meeting_id = $1',
+      [meetingId]
     );
-    return result.rows[0] || null;
+    if (result.rows.length === 0) {
+      return null;
+    }
+    return result.rows[0];
   }
 
   async addAttendee(meetingId: string, name: string): Promise<Attendee> {
-    const id = uuidv4();
+    // Check if meeting exists
+    const meeting = await this.getMeeting(meetingId);
+    if (!meeting) {
+      throw new Error('Meeting not found');
+    }
+
+    const attendeeId = uuidv4();
     const result = await this.db.query<Attendee>(
       'INSERT INTO attendees (id, meeting_id, name) VALUES ($1, $2, $3) RETURNING *',
-      [id, meetingId, name]
+      [attendeeId, meetingId, name]
     );
+
+    // Create initial status
+    await this.db.query(
+      'INSERT INTO attendee_current_status (attendee_id, meeting_id, status) VALUES ($1, $2, $3)',
+      [attendeeId, meetingId, 'engaged']
+    );
+
     return result.rows[0];
   }
 
-  async updateAttendeeStatus(attendeeId: string, status: string, context?: string): Promise<void> {
-    await this.db.transaction(async (client) => {
-      // Update attendee status
-      await client.query(
-        'UPDATE attendees SET current_status = $1, last_seen = NOW() WHERE id = $2',
-        [status, attendeeId]
-      );
-
-      // Add status update record
-      const statusUpdateId = uuidv4();
-      await client.query(
-        'INSERT INTO status_updates (id, attendee_id, status, context) VALUES ($1, $2, $3, $4)',
-        [statusUpdateId, attendeeId, status, context]
-      );
-    });
-  }
-
-  async getAttendeeStatusHistory(attendeeId: string): Promise<StatusUpdate[]> {
-    const result = await this.db.query<StatusUpdate>(
-      'SELECT * FROM status_updates WHERE attendee_id = $1 ORDER BY created_at DESC',
+  async getAttendee(attendeeId: string): Promise<Attendee & { currentStatus?: string }> {
+    const result = await this.db.query<Attendee>(
+      'SELECT a.*, acs.status as current_status FROM attendees a LEFT JOIN attendee_current_status acs ON a.id = acs.attendee_id WHERE a.id = $1',
       [attendeeId]
     );
-    return result.rows;
+    if (result.rows.length === 0) {
+      throw new Error('Attendee not found');
+    }
+    const attendee = result.rows[0];
+    return {
+      ...attendee,
+      currentStatus: result.rows[0].current_status
+    };
   }
 
-  async addTranscription(meetingId: string, text: string): Promise<Transcription> {
-    const id = uuidv4();
-    const queryResult = await this.db.query<Transcription>(
-      'INSERT INTO transcriptions (id, meeting_id, text) VALUES ($1, $2, $3) RETURNING *',
-      [id, meetingId, text]
-    );
-    return queryResult.rows[0];
-  }
-
-  async getTranscriptions(meetingId: string): Promise<Transcription[]> {
-    const result = await this.db.query<Transcription>(
-      'SELECT * FROM transcriptions WHERE meeting_id = $1 ORDER BY created_at ASC',
+  async getAttendees(meetingId: string): Promise<Array<Attendee & { currentStatus: string }>> {
+    const result = await this.db.query<Attendee & { current_status: string }>(
+      'SELECT a.*, acs.status as current_status FROM attendees a LEFT JOIN attendee_current_status acs ON a.id = acs.attendee_id WHERE a.meeting_id = $1',
       [meetingId]
     );
-    return result.rows;
+    return result.rows.map(row => ({
+      ...row,
+      currentStatus: row.current_status || 'engaged'
+    }));
   }
 
   async getMeetingAttendees(meetingId: string): Promise<Attendee[]> {
@@ -82,58 +91,103 @@ export class MeetingRepository {
     return result.rows;
   }
 
-  async updateMeetingQrCode(meetingId: string, qrCode: string): Promise<void> {
-    await this.db.query(
-      'UPDATE meetings SET qr_code = $1 WHERE id = $2',
-      [qrCode, meetingId]
-    );
-  }
+  async updateAttendeeStatus(attendeeId: string, meetingId: string, status: string): Promise<void> {
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(attendeeId)) {
+      throw new Error('Attendee not found in meeting');
+    }
 
-  async getMeetingStats(meetingId: string): Promise<{ total: number; engaged: number; confused: number; idea: number; disagree: number }> {
-    const result = await this.db.query<{ status: string; count: string }[]>(`
-      SELECT current_status as status, COUNT(*) as count
-      FROM attendees
-      WHERE meeting_id = $1
-      GROUP BY current_status
-    `, [meetingId]);
+    const lowerStatus = status.toLowerCase();
 
-    const stats = {
-      total: 0,
-      engaged: 0,
-      confused: 0,
-      idea: 0,
-      disagree: 0
-    };
+    await this.db.transaction(async (client) => {
+      // Check if attendee exists in this meeting
+      const attendee = await client.query(
+        'SELECT * FROM attendees WHERE id = $1 AND meeting_id = $2',
+        [attendeeId, meetingId]
+      );
+      if (attendee.rows.length === 0) {
+        throw new Error('Attendee not found in meeting');
+      }
 
-    result.rows.forEach(row => {
-      const count = parseInt(row.count);
-      stats.total += count;
-      stats[row.status as keyof typeof stats] = count;
+      // Update or insert status
+      const existingStatus = await client.query(
+        'SELECT * FROM attendee_current_status WHERE attendee_id = $1 AND meeting_id = $2',
+        [attendeeId, meetingId]
+      );
+
+      if (existingStatus.rows.length > 0) {
+        await client.query(
+          'UPDATE attendee_current_status SET status = $1, updated_at = NOW() WHERE attendee_id = $2 AND meeting_id = $3',
+          [lowerStatus, attendeeId, meetingId]
+        );
+      } else {
+        await client.query(
+          'INSERT INTO attendee_current_status (attendee_id, meeting_id, status) VALUES ($1, $2, $3)',
+          [attendeeId, meetingId, lowerStatus]
+        );
+      }
+
+      // Add status update record
+      await client.query(
+        'INSERT INTO status_updates (id, attendee_id, meeting_id, status) VALUES ($1, $2, $3, $4)',
+        [uuidv4(), attendeeId, meetingId, lowerStatus]
+      );
     });
-
-    return stats;
   }
 
-  async addStatusUpdate(attendeeId: string, status: string, context: string): Promise<void> {
-    const statusUpdateId = uuidv4();
+  async updateAttendeeHeartbeat(attendeeId: string, meetingId: string): Promise<void> {
     await this.db.query(
-      'INSERT INTO status_updates (id, attendee_id, status, context) VALUES ($1, $2, $3, $4)',
-      [statusUpdateId, attendeeId, status, context]
+      `UPDATE attendee_current_status 
+       SET last_heartbeat = NOW(), updated_at = NOW()
+       WHERE attendee_id = $1 AND meeting_id = $2`,
+      [attendeeId, meetingId]
     );
   }
 
-  async getStatusHistory(attendeeId: string): Promise<StatusUpdate[]> {
+  async addStatusUpdate(attendeeId: string, meetingId: string, status: string, context?: string): Promise<void> {
+    await this.db.query(
+      'INSERT INTO status_updates (id, attendee_id, meeting_id, status, context) VALUES ($1, $2, $3, $4, $5)',
+      [uuidv4(), attendeeId, meetingId, status, context]
+    );
+  }
+
+  async getStatusHistory(attendeeId: string, meetingId: string): Promise<StatusUpdate[]> {
     const result = await this.db.query<StatusUpdate>(
-      'SELECT * FROM status_updates WHERE attendee_id = $1 ORDER BY created_at DESC',
-      [attendeeId]
+      'SELECT * FROM status_updates WHERE attendee_id = $1 AND meeting_id = $2 ORDER BY created_at DESC',
+      [attendeeId, meetingId]
     );
     return result.rows;
   }
 
-  async updateMeetingId(oldId: string, newId: string): Promise<void> {
+  async updateMeetingQrCode(meetingId: string, qrCode: string): Promise<void> {
     await this.db.query(
-      'UPDATE meetings SET id = $1 WHERE id = $2',
-      [newId, oldId]
+      'UPDATE meetings SET qr_code = $1, updated_at = NOW() WHERE meeting_id = $2',
+      [qrCode, meetingId]
     );
+  }
+
+  async getMeetingStats(meetingId: string): Promise<MeetingStats> {
+    const result = await this.db.query(
+      `SELECT 
+        COUNT(DISTINCT a.id) as total,
+        COUNT(DISTINCT CASE WHEN LOWER(acs.status) = 'engaged' THEN a.id END) as engaged,
+        COUNT(DISTINCT CASE WHEN LOWER(acs.status) = 'confused' THEN a.id END) as confused,
+        COUNT(DISTINCT CASE WHEN LOWER(acs.status) = 'idea' THEN a.id END) as idea,
+        COUNT(DISTINCT CASE WHEN LOWER(acs.status) = 'disagree' THEN a.id END) as disagree
+      FROM attendees a
+      LEFT JOIN attendee_current_status acs ON a.id = acs.attendee_id
+      WHERE a.meeting_id = $1`,
+      [meetingId]
+    );
+
+    const stats = result.rows[0];
+    return {
+      total: Number(stats.total),
+      engaged: Number(stats.engaged),
+      confused: Number(stats.confused),
+      idea: Number(stats.idea),
+      disagree: Number(stats.disagree)
+    };
   }
 }
