@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Meeting } from '../types/meeting.types';
+import { config } from '../config';
 
 interface CreateMeetingProps {
   onMeetingCreated: (meeting: Meeting) => void;
@@ -17,7 +18,7 @@ export const CreateMeeting: React.FC<CreateMeetingProps> = ({ onMeetingCreated }
 
     try {
       console.log('Sending request with title:', title);
-      const response = await fetch('http://localhost:3000/api/meetings', {
+      const response = await fetch(`${config.apiUrl}/api/meetings`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -59,37 +60,39 @@ export const CreateMeeting: React.FC<CreateMeetingProps> = ({ onMeetingCreated }
   };
 
   return (
-    <div className="max-w-2xl mx-auto p-8 bg-white rounded-lg shadow-md">
-      <h2 className="text-3xl font-bold mb-6 text-center">Create New Meeting</h2>
-      {error && (
-        <div className="mb-4 p-4 text-red-700 bg-red-100 rounded-md">
-          {error}
-        </div>
-      )}
-      <form onSubmit={handleSubmit}>
-        <div className="mb-6">
-          <label htmlFor="title" className="block text-xl font-medium text-gray-700 mb-2">
-            Meeting Title
-          </label>
-          <input
-            type="text"
-            id="title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xl py-3 px-4"
-            required
-            placeholder="Enter meeting title..."
+    <div className="space-y-4">
+      <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
+        <h2 className="text-xl sm:text-2xl font-semibold mb-4">Create a New Meeting</h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label htmlFor="title" className="block text-sm font-medium text-gray-700">
+              Meeting Title
+            </label>
+            <input
+              type="text"
+              id="title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="mt-1 block w-full text-sm p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter meeting title"
+              required
+              disabled={isLoading}
+            />
+          </div>
+          <button
+            type="submit"
             disabled={isLoading}
-          />
-        </div>
-        <button
-          type="submit"
-          className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-xl font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-          disabled={isLoading}
-        >
-          {isLoading ? 'Creating...' : 'Create Meeting'}
-        </button>
-      </form>
+            className="w-full px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoading ? 'Creating...' : 'Create Meeting'}
+          </button>
+          {error && (
+            <p className="mt-2 text-sm text-red-600">
+              {error}
+            </p>
+          )}
+        </form>
+      </div>
     </div>
   );
 };

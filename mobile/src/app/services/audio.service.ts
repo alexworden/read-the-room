@@ -1,5 +1,6 @@
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
+import { config } from '../config';
 
 export class AudioService {
   private recording: Audio.Recording | null = null;
@@ -50,7 +51,7 @@ export class AudioService {
   async uploadAudio(meetingId: string, audioUri: string): Promise<void> {
     try {
       const response = await FileSystem.uploadAsync(
-        `http://localhost:3000/api/meetings/${meetingId}/audio`,
+        `${config.apiUrl}/api/meetings/${meetingId}/audio`,
         audioUri,
         {
           fieldName: 'audio',

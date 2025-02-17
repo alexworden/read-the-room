@@ -8,6 +8,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { AttendeeStatus } from '../types/meeting.types';
+import { config } from '../config';
 
 interface MeetingRoomProps {
   meetingId: string;
@@ -27,7 +28,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meetingId, attendeeId 
   const updateStatus = async (status: AttendeeStatus) => {
     try {
       const response = await fetch(
-        `http://localhost:3000/api/meetings/${meetingId}/attendees/${attendeeId}/status`,
+        `${config.apiUrl}/api/meetings/${meetingId}/attendees/${attendeeId}/status`,
         {
           method: 'PUT',
           headers: {
@@ -50,7 +51,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meetingId, attendeeId 
 
   useEffect(() => {
     // Set up WebSocket connection for real-time updates
-    const ws = new WebSocket(`ws://localhost:3000/meetings/${meetingId}`);
+    const ws = new WebSocket(`${config.apiUrl.replace('http', 'ws')}/meetings/${meetingId}`);
 
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);

@@ -9,15 +9,21 @@ import { json } from 'express';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 
 import { AppModule } from './app/app.module';
+import { config } from './app/config';
 
 declare const module: any;
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.setGlobalPrefix('api');
-  
+
+  // Configure CORS
+  const origins = [
+    config.webUrl,
+    'http://localhost:19000', // Keep this for Expo development
+  ];
   app.enableCors({
-    origin: ['http://localhost:4200'],
+    origin: origins,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
@@ -26,14 +32,14 @@ async function bootstrap() {
   // Enable JSON body parsing
   app.use(json());
   
-  // Enable Socket.IO support
+  // Configure WebSocket
   app.useWebSocketAdapter(new IoAdapter(app));
 
-  const port = process.env.PORT || 3000;
-  await app.listen(port);
-  Logger.log(
-    `🚀 Application is running on: http://localhost:${port}/api`
-  );
+  await app.listen(config.apiPort, config.apiHost);
+  
+  const url = config.apiUrl;
+  Logger.log(`🚀 Application is running on: ${url}/api`);
+  Logger.log(`🌐 Allowed origins: ${origins.join(', ')}`);
 
   if (module.hot) {
     module.hot.accept();

@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, useParams, useNavigate, useLocation } from 'react-router-dom';
+import { Routes, Route, useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Meeting, Attendee } from './types/meeting.types';
 import { CreateMeeting } from './components/CreateMeeting';
 import { JoinMeeting } from './components/JoinMeeting';
 import { MeetingRoom } from './components/MeetingRoom';
+import { config } from './config';
 
 // Wrapper component for CreateMeeting to handle navigation
 const CreateMeetingWrapper = () => {
@@ -37,7 +38,7 @@ const JoinMeetingWrapper = () => {
 
       try {
         // Fetch meeting details
-        const meetingResponse = await fetch(`http://localhost:3000/api/meetings/${meetingId}`);
+        const meetingResponse = await fetch(`${config.apiUrl}/api/meetings/${meetingId}`);
         if (!meetingResponse.ok) {
           throw new Error(`Failed to fetch meeting: ${meetingResponse.statusText}`);
         }
@@ -114,8 +115,8 @@ const MeetingRoomWrapper = () => {
 // Layout component that contains the routes
 const AppLayout = () => {
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-7xl mx-auto px-4">
+    <div className="min-h-screen bg-gray-50">
+      <div className="w-full max-w-lg mx-auto px-4 py-4 sm:py-8">
         <Routes>
           <Route path="/" element={<CreateMeetingWrapper />} />
           <Route path="/join/:meetingId" element={<JoinMeetingWrapper />} />
@@ -128,9 +129,5 @@ const AppLayout = () => {
 
 // Main App component
 export default function App() {
-  return (
-    <BrowserRouter>
-      <AppLayout />
-    </BrowserRouter>
-  );
+  return <AppLayout />;
 }

@@ -2,54 +2,45 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
-import { nxCopyAssetsPlugin } from '@nx/vite/plugins/nx-copy-assets.plugin';
 
 export default defineConfig({
   root: __dirname,
   cacheDir: '../node_modules/.vite/web',
   server: {
-    port: 4200,
-    host: true, // listen on all addresses
+    port: parseInt(process.env.RTR_WEB_PORT || '4200'),
+    host: process.env.RTR_WEB_HOST || 'localhost',
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',
+        target: `${process.env.RTR_API_PROTOCOL || 'http'}://${process.env.RTR_API_HOST || 'localhost'}:${process.env.RTR_API_PORT || '3000'}`,
         changeOrigin: true,
         secure: false,
       },
-      '/ws': {
-        target: 'ws://localhost:3000',
+      '/socket.io': {
+        target: `${process.env.RTR_API_PROTOCOL || 'http'}://${process.env.RTR_API_HOST || 'localhost'}:${process.env.RTR_API_PORT || '3000'}`,
         ws: true,
+        changeOrigin: true,
       },
     },
   },
   preview: {
-    port: 4300,
-    host: 'localhost',
+    port: parseInt(process.env.RTR_WEB_PORT || '4200'),
+    host: process.env.RTR_WEB_HOST || 'localhost',
   },
-  plugins: [react(), nxViteTsPaths(), nxCopyAssetsPlugin(['*.md'])],
-  // Uncomment this if you are using workers.
-  // worker: {
-  //  plugins: [ nxViteTsPaths() ],
-  // },
+  plugins: [
+    react(),
+    nxViteTsPaths(),
+  ],
   build: {
     outDir: '../dist/web',
-    emptyOutDir: true,
     reportCompressedSize: true,
-    commonjsOptions: {
-      transformMixedEsModules: true,
-    },
+    commonjsOptions: { transformMixedEsModules: true },
   },
-  test: {
-    globals: true,
-    cache: {
-      dir: '../node_modules/.vitest',
-    },
-    environment: 'jsdom',
-    include: ['src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
-    reporters: ['default'],
-    coverage: {
-      reportsDirectory: '../coverage/web',
-      provider: 'v8',
-    },
+  define: {
+    'import.meta.env.RTR_API_PROTOCOL': JSON.stringify(process.env.RTR_API_PROTOCOL || 'http'),
+    'import.meta.env.RTR_API_HOST': JSON.stringify(process.env.RTR_API_HOST || 'localhost'),
+    'import.meta.env.RTR_API_PORT': JSON.stringify(process.env.RTR_API_PORT || '3000'),
+    'import.meta.env.RTR_WEB_PROTOCOL': JSON.stringify(process.env.RTR_WEB_PROTOCOL || 'http'),
+    'import.meta.env.RTR_WEB_HOST': JSON.stringify(process.env.RTR_WEB_HOST || 'localhost'),
+    'import.meta.env.RTR_WEB_PORT': JSON.stringify(process.env.RTR_WEB_PORT || '4200'),
   },
 });

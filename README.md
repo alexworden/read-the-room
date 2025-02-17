@@ -102,6 +102,37 @@ readtheroom/
    npm install
    ```
 
+## Running the Application
+
+The application includes convenient startup scripts that handle environment configuration:
+
+1. Start the Backend
+   ```bash
+   ./start-backend.sh
+   ```
+   This script configures the backend to run on your local network IP address and starts the NestJS server.
+
+2. Start the Frontend
+   ```bash
+   ./start-frontend.sh
+   ```
+   This script configures the frontend with the correct environment variables and starts the development server.
+
+Both scripts automatically detect your local network IP address and configure the application accordingly, making it accessible from other devices on your network.
+
+## Environment Variables
+
+The application uses environment variables prefixed with `RTR_` for configuration:
+
+- `RTR_WEB_HOST`: Local machine IP address
+- `RTR_API_HOST`: Backend server IP
+- `RTR_WEB_PORT`: Frontend port (default 4200)
+- `RTR_API_PORT`: Backend port (default 3000)
+- `RTR_WEB_PROTOCOL`: Web protocol (default http)
+- `RTR_API_PROTOCOL`: API protocol (default http)
+
+These variables are automatically set by the startup scripts, but can be overridden if needed.
+
 ## Development
 
 ### Backend Server
@@ -200,3 +231,15 @@ The application uses Socket.IO for real-time communication. Here are the main ev
 3. Commit your changes (`git commit -m 'Add some amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
+
+# Deployment
+
+To deploy the application to production, set the following environment variables. These are the variables used by Railway to deploy the application:
+
+```bash
+NODE_ENV=production
+RTR_API_PROTOCOL=https
+RTR_API_HOST=readtheroom-api.railway.app
+RTR_WEB_PROTOCOL=https
+RTR_WEB_HOST=readtheroom.railway.app
+RTR_ALLOWED_ORIGINS=https://readtheroom.railway.app

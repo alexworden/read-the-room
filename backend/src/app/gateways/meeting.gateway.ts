@@ -12,10 +12,14 @@ import { MeetingStateService } from '../services/meeting-state.service';
 import { MeetingService } from '../services/meeting.service';
 import { MeetingRepository } from '../repositories/meeting.repository';
 import { Logger } from '@nestjs/common';
+import { config } from '../config';
 
 @WebSocketGateway({
   cors: {
-    origin: ['http://localhost:4200'],
+    origin: [
+      config.webUrl,
+      'http://localhost:19000', // Keep this for Expo development
+    ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     credentials: true,
   },

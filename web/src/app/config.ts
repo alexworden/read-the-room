@@ -1,3 +1,3 @@
 export const config = {
-  apiUrl: process.env.BACKEND_URL || 'http://localhost:3000',
+  apiUrl: `${import.meta.env.RTR_API_PROTOCOL || 'http'}://${import.meta.env.RTR_API_HOST || 'localhost'}:${import.meta.env.RTR_API_PORT || '3000'}`,
 };
