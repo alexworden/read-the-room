@@ -54,64 +54,60 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
     }
   }
 
-  private ensureRoomExists(meetingId: string) {
-    if (!this.rooms.has(meetingId)) {
-      this.rooms.set(meetingId, new Set());
+  private ensureRoomExists(meetingUuid: string) {
+    if (!this.rooms.has(meetingUuid)) {
+      this.rooms.set(meetingUuid, new Set());
     }
   }
 
-  private addClientToRoom(meetingId: string, clientId: string) {
-    this.ensureRoomExists(meetingId);
-    this.rooms.get(meetingId).add(clientId);
+  private addClientToRoom(meetingUuid: string, clientId: string) {
+    this.ensureRoomExists(meetingUuid);
+    this.rooms.get(meetingUuid).add(clientId);
   }
 
-  private isClientInRoom(meetingId: string, clientId: string): boolean {
-    return this.rooms.has(meetingId) && this.rooms.get(meetingId).has(clientId);
+  private isClientInRoom(meetingUuid: string, clientId: string): boolean {
+    return this.rooms.has(meetingUuid) && this.rooms.get(meetingUuid).has(clientId);
   }
 
-  private async emitUpdatedStats(meetingId: string) {
+  private async emitUpdatedStats(meetingUuid: string) {
     try {
-      const stats = await this.meetingService.getMeetingStats(meetingId);
-      this.server.to(meetingId).emit('stats', stats);
+      const stats = await this.meetingService.getMeetingStats(meetingUuid);
+      this.server.to(meetingUuid).emit('stats', stats);
     } catch (error) {
-      this.logger.error(`Failed to emit stats for meeting ${meetingId}:`, error);
+      this.logger.error(`Failed to emit stats for meeting ${meetingUuid}:`, error);
     }
   }
 
   @SubscribeMessage('joinMeeting')
   async handleJoinMeeting(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { meetingId: string; attendeeId: string },
+    @MessageBody() data: { meetingUuid: string; attendeeId: string },
   ) {
-    const { meetingId, attendeeId } = data;
+    const { meetingUuid, attendeeId } = data;
     
     try {
-      // Verify meeting exists
-      const meeting = await this.meetingService.getMeeting(meetingId);
-      if (!meeting) {
-        client.emit('error', { message: 'Meeting not found' });
-        return;
-      }
-
-      // Join socket.io room
-      await client.join(meetingId);
-      this.addClientToRoom(meetingId, client.id);
-      this.logger.log(`Client ${client.id} joined meeting ${meetingId}`);
+      // Join socket.io room using meeting_uuid
+      await client.join(meetingUuid);
+      this.addClientToRoom(meetingUuid, client.id);
+      this.logger.log(`Client ${client.id} joined meeting ${meetingUuid}`);
 
       // Add attendee to meeting state
-      this.meetingStateService.addAttendee(meetingId, attendeeId);
+      this.meetingStateService.addAttendee(meetingUuid, attendeeId);
 
+      // Get attendee with current status
+      const attendee = await this.meetingService.getAttendee(attendeeId);
+      
       // Emit updated attendee list
-      const attendees = await this.meetingService.getMeetingAttendees(meetingId);
-      this.server.to(meetingId).emit('attendeesUpdated', attendees);
+      const attendees = await this.meetingService.getMeetingAttendees(meetingUuid);
+      this.server.to(meetingUuid).emit('attendeesUpdated', attendees);
 
       // Send initial stats
-      await this.emitUpdatedStats(meetingId);
+      await this.emitUpdatedStats(meetingUuid);
 
-      // Confirm join
-      client.emit('joinedMeeting', { meetingId });
+      // Confirm join and send current status
+      client.emit('joinedMeeting', { currentStatus: attendee.currentStatus });
     } catch (error) {
-      this.logger.error(`Error joining meeting ${meetingId}:`, error);
+      this.logger.error(`Error joining meeting ${meetingUuid}:`, error);
       client.emit('error', { message: 'Failed to join meeting' });
     }
   }
@@ -119,66 +115,123 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
   @SubscribeMessage('leaveMeeting')
   async handleLeaveMeeting(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { meetingId: string; attendeeId: string },
+    @MessageBody() data: { meetingUuid: string; attendeeId: string },
   ) {
-    const { meetingId, attendeeId } = data;
+    const { meetingUuid, attendeeId } = data;
     
     try {
       // Leave socket.io room
-      await client.leave(meetingId);
-      if (this.rooms.has(meetingId)) {
-        this.rooms.get(meetingId).delete(client.id);
+      await client.leave(meetingUuid);
+      if (this.rooms.has(meetingUuid)) {
+        this.rooms.get(meetingUuid).delete(client.id);
       }
-      this.logger.log(`Client ${client.id} left meeting ${meetingId}`);
+      this.logger.log(`Client ${client.id} left meeting ${meetingUuid}`);
 
       // Remove attendee from meeting state
-      this.meetingStateService.removeAttendee(meetingId, attendeeId);
+      this.meetingStateService.removeAttendee(meetingUuid, attendeeId);
 
       // Emit updates
-      const attendees = await this.meetingService.getMeetingAttendees(meetingId);
-      this.server.to(meetingId).emit('attendeesUpdated', attendees);
-      await this.emitUpdatedStats(meetingId);
+      const attendees = await this.meetingService.getMeetingAttendees(meetingUuid);
+      this.server.to(meetingUuid).emit('attendeesUpdated', attendees);
+      await this.emitUpdatedStats(meetingUuid);
 
       // Confirm leave
-      client.emit('leftMeeting', { meetingId });
+      client.emit('leftMeeting');
     } catch (error) {
-      this.logger.error(`Error leaving meeting ${meetingId}:`, error);
+      this.logger.error(`Error leaving meeting ${meetingUuid}:`, error);
       client.emit('error', { message: 'Failed to leave meeting' });
     }
   }
 
   @SubscribeMessage('updateStatus')
-  async handleUpdateStatus(
+  async handleStatusUpdate(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { meetingId: string; attendeeId: string; status: string }
-  ): Promise<void> {
-    const { meetingId, attendeeId, status } = data;
-    
-    this.logger.log(`Received status update request - Meeting: ${meetingId}, Attendee: ${attendeeId}, Status: ${status}`);
+    @MessageBody() data: { meetingUuid: string; attendeeId: string; status: string },
+  ) {
+    const { meetingUuid, attendeeId, status } = data;
     
     try {
-      // Verify client is in the room
-      if (!this.isClientInRoom(meetingId, client.id)) {
-        this.logger.error(`Client ${client.id} not in meeting room ${meetingId}`);
+      if (!this.isClientInRoom(meetingUuid, client.id)) {
+        this.logger.error(`Client ${client.id} not in meeting room ${meetingUuid}`);
         client.emit('error', { message: 'Not in meeting room' });
         return;
       }
 
-      this.logger.log(`Updating status in database - Meeting: ${meetingId}, Attendee: ${attendeeId}, Status: ${status}`);
+      this.logger.debug(`Updating status in database - Meeting: ${meetingUuid}, Attendee: ${attendeeId}, Status: ${status}`);
+      
       // Update status
-      await this.meetingService.updateAttendeeStatus(attendeeId, meetingId, status);
+      await this.meetingService.updateAttendeeStatus(attendeeId, meetingUuid, status);
       
-      this.logger.log(`Status updated successfully, emitting to room ${meetingId}`);
+      this.logger.debug(`Status updated successfully, emitting to room ${meetingUuid}`);
       // Emit updates
-      this.server.to(meetingId).emit('statusUpdated', { attendeeId, status });
+      this.server.to(meetingUuid).emit('statusUpdated', { attendeeId, status });
       
-      this.logger.log(`Fetching updated stats for meeting ${meetingId}`);
-      const stats = await this.meetingService.getMeetingStats(meetingId);
-      this.logger.log(`Emitting updated stats to room ${meetingId}:`, stats);
-      this.server.to(meetingId).emit('stats', stats);
+      this.logger.debug(`Fetching updated stats for meeting ${meetingUuid}`);
+      const stats = await this.meetingService.getMeetingStats(meetingUuid);
+      this.logger.debug(`Emitting updated stats to room ${meetingUuid}:`, stats);
+      this.server.to(meetingUuid).emit('stats', stats);
     } catch (error) {
-      this.logger.error(`Error updating status in meeting ${meetingId}:`, error);
+      this.logger.error(`Error updating status in meeting ${meetingUuid}:`, error);
       client.emit('error', { message: 'Failed to update status' });
+    }
+  }
+
+  @SubscribeMessage('comment')
+  async handleComment(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { meetingUuid: string; attendeeId: string; content: string },
+  ) {
+    const { meetingUuid, attendeeId, content } = data;
+    
+    try {
+      if (!this.isClientInRoom(meetingUuid, client.id)) {
+        this.logger.error(`Client ${client.id} not in meeting room ${meetingUuid}`);
+        client.emit('error', { message: 'Not in meeting room' });
+        return;
+      }
+
+      // Add comment to database
+      const comment = await this.meetingService.addComment(attendeeId, meetingUuid, content);
+      
+      // Get updated comments list
+      const comments = await this.meetingService.getComments(meetingUuid);
+      
+      // Emit updated comments to all clients in the room
+      this.server.to(meetingUuid).emit('commentsUpdated', comments);
+    } catch (error) {
+      this.logger.error(`Error adding comment in meeting ${meetingUuid}:`, error);
+      client.emit('error', { message: 'Failed to add comment' });
+    }
+  }
+
+  @SubscribeMessage('reaction')
+  async handleReaction(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { meetingUuid: string; attendeeId: string; reaction: { type: string } },
+  ) {
+    const { meetingUuid, attendeeId, reaction } = data;
+
+    try {
+      await this.meetingService.addReaction(attendeeId, meetingUuid, reaction.type);
+      await this.emitUpdatedStats(meetingUuid);
+    } catch (error) {
+      this.logger.error(`Error handling reaction in meeting ${meetingUuid}:`, error);
+      client.emit('error', { message: 'Failed to add reaction' });
+    }
+  }
+
+  @SubscribeMessage('heartbeat')
+  async handleHeartbeat(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { meetingUuid: string; attendeeId: string },
+  ) {
+    const { meetingUuid, attendeeId } = data;
+    
+    try {
+      await this.meetingService.updateAttendeeHeartbeat(attendeeId, meetingUuid);
+    } catch (error) {
+      this.logger.error(`Error updating heartbeat for attendee ${attendeeId} in meeting ${meetingUuid}:`, error);
+      client.emit('error', { message: 'Failed to update heartbeat' });
     }
   }
 }

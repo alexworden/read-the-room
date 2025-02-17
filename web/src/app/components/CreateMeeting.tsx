@@ -14,8 +14,8 @@ export const CreateMeeting: React.FC<CreateMeetingProps> = ({ onMeetingCreated }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
     setError(null);
+    setIsLoading(true);
 
     try {
       // Create the meeting
@@ -31,18 +31,8 @@ export const CreateMeeting: React.FC<CreateMeetingProps> = ({ onMeetingCreated }
         throw new Error('Failed to create meeting');
       }
 
-      const meetingData = await response.json();
-      console.log('Meeting created successfully:', meetingData);
-
-      // Convert snake_case to camelCase for frontend use
-      const meeting: Meeting = {
-        id: meetingData.meeting_id,
-        uuid: meetingData.meeting_uuid,
-        title: meetingData.title,
-        createdAt: meetingData.created_at,
-        updatedAt: meetingData.updated_at,
-        qrCode: meetingData.qr_code
-      };
+      const meeting: Meeting = await response.json();
+      console.log('Meeting created successfully:', meeting);
 
       onMeetingCreated(meeting, name);
       setTitle('');
@@ -97,11 +87,7 @@ export const CreateMeeting: React.FC<CreateMeetingProps> = ({ onMeetingCreated }
           >
             {isLoading ? 'Creating...' : 'Create Meeting'}
           </button>
-          {error && (
-            <p className="mt-2 text-sm text-red-600">
-              {error}
-            </p>
-          )}
+          {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
         </form>
       </div>
     </div>

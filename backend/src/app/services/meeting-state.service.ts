@@ -12,61 +12,74 @@ export class MeetingStateService {
   private attendees = new Map<string, MeetingState>();
 
   createMeeting(meeting: Meeting): void {
-    this.meetings.set(meeting.meeting_uuid, meeting);
-    this.heartbeats.set(meeting.meeting_uuid, new Map());
-    this.attendees.set(meeting.meeting_uuid, { attendees: new Set() });
+    this.meetings.set(meeting.meetingUuid, meeting);
+    this.heartbeats.set(meeting.meetingUuid, new Map());
+    this.attendees.set(meeting.meetingUuid, { attendees: new Set() });
   }
 
-  getMeeting(meeting_uuid: string): Meeting | undefined {
-    return this.meetings.get(meeting_uuid);
+  getMeeting(meetingUuid: string): Meeting | undefined {
+    return this.meetings.get(meetingUuid);
   }
 
   addMeeting(meeting: Meeting): void {
-    this.meetings.set(meeting.meeting_uuid, meeting);
-    this.heartbeats.set(meeting.meeting_uuid, new Map());
-    this.attendees.set(meeting.meeting_uuid, { attendees: new Set() });
+    this.meetings.set(meeting.meetingUuid, meeting);
+    this.heartbeats.set(meeting.meetingUuid, new Map());
+    this.attendees.set(meeting.meetingUuid, { attendees: new Set() });
   }
 
   updateMeeting(meeting: Meeting): void {
-    this.meetings.set(meeting.meeting_uuid, meeting);
+    this.meetings.set(meeting.meetingUuid, meeting);
+    this.heartbeats.set(meeting.meetingUuid, new Map());
+    this.attendees.set(meeting.meetingUuid, { attendees: new Set() });
   }
 
-  removeMeeting(meeting_uuid: string): void {
-    this.meetings.delete(meeting_uuid);
-    this.heartbeats.delete(meeting_uuid);
-    this.attendees.delete(meeting_uuid);
+  removeMeeting(meetingUuid: string): void {
+    this.meetings.delete(meetingUuid);
+    this.heartbeats.delete(meetingUuid);
+    this.attendees.delete(meetingUuid);
   }
 
-  setLastHeartbeat(meeting_uuid: string, attendeeId: string, timestamp: string): void {
-    let meetingHeartbeats = this.heartbeats.get(meeting_uuid);
+  setLastHeartbeat(meetingUuid: string, attendeeId: string, timestamp: string): void {
+    let meetingHeartbeats = this.heartbeats.get(meetingUuid);
     if (!meetingHeartbeats) {
       meetingHeartbeats = new Map();
-      this.heartbeats.set(meeting_uuid, meetingHeartbeats);
+      this.heartbeats.set(meetingUuid, meetingHeartbeats);
     }
     meetingHeartbeats.set(attendeeId, timestamp);
   }
 
-  getLastHeartbeat(meeting_uuid: string, attendeeId: string): string | undefined {
-    return this.heartbeats.get(meeting_uuid)?.get(attendeeId);
+  getLastHeartbeat(meetingUuid: string, attendeeId: string): string | undefined {
+    return this.heartbeats.get(meetingUuid)?.get(attendeeId);
   }
 
-  addAttendee(meeting_uuid: string, attendeeId: string): void {
-    if (!this.attendees.has(meeting_uuid)) {
-      this.attendees.set(meeting_uuid, { attendees: new Set() });
-    }
-    this.attendees.get(meeting_uuid).attendees.add(attendeeId);
-  }
-
-  removeAttendee(meeting_uuid: string, attendeeId: string): void {
-    if (this.attendees.has(meeting_uuid)) {
-      this.attendees.get(meeting_uuid).attendees.delete(attendeeId);
+  addAttendee(meetingUuid: string, attendeeId: string): void {
+    const meetingAttendees = this.attendees.get(meetingUuid);
+    if (meetingAttendees) {
+      meetingAttendees.attendees.add(attendeeId);
     }
   }
 
-  getMeetingAttendees(meeting_uuid: string): string[] {
-    if (!this.attendees.has(meeting_uuid)) {
-      return [];
+  removeAttendee(meetingUuid: string, attendeeId: string): void {
+    const meetingAttendees = this.attendees.get(meetingUuid);
+    if (meetingAttendees) {
+      meetingAttendees.attendees.delete(attendeeId);
     }
-    return Array.from(this.attendees.get(meeting_uuid).attendees);
+  }
+
+  getAttendees(meetingUuid: string): Set<string> | undefined {
+    const meetingAttendees = this.attendees.get(meetingUuid);
+    return meetingAttendees?.attendees;
+  }
+
+  updateHeartbeat(meetingUuid: string, attendeeId: string): void {
+    const meetingHeartbeats = this.heartbeats.get(meetingUuid);
+    if (meetingHeartbeats) {
+      meetingHeartbeats.set(attendeeId, new Date().toISOString());
+    }
+  }
+
+  getHeartbeat(meetingUuid: string, attendeeId: string): string | undefined {
+    const meetingHeartbeats = this.heartbeats.get(meetingUuid);
+    return meetingHeartbeats?.get(attendeeId);
   }
 }

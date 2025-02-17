@@ -241,19 +241,28 @@ The application uses Socket.IO for real-time communication. Here are the main ev
 ## Development Tips
 
 1. **Running Both Services**
-   - Start the backend first: `cd backend && npm run start:dev`
-   - Start the web app second: `cd web && npx nx serve web`
+   - The recommended way to start the services is using the provided scripts:
+     ```bash
+     ./start-backend.sh   # Starts the backend service
+     ./start-frontend.sh  # Starts the frontend service
+     ```
+   - These scripts automatically configure environment variables and network settings
+   - Alternatively, you can start services manually:
+     - Backend: `cd backend && npm run start:dev`
+     - Frontend: `cd web && npx nx serve web`
    - Both services must be running for the application to work
 
-2. **Debugging**
+2. **Package Installation**
+   - If you encounter peer dependency conflicts when installing new packages, use the `--legacy-peer-deps` flag:
+     ```bash
+     npm install --save-dev <package-name> --legacy-peer-deps
+     ```
+   - This is particularly useful when installing TypeScript type definitions (@types packages)
+
+3. **Debugging**
    - Backend logs are available in the terminal running the backend service
    - Frontend logs can be viewed in the browser's developer console
    - Socket.IO connection status is logged in both backend and frontend
-
-3. **Common Issues**
-   - If the backend fails to start due to port 3000 being in use, kill the existing process and try again
-   - If Socket.IO connection fails, ensure both servers are running and check CORS settings
-   - Clear browser cache if you encounter stale data or connection issues
 
 ## Contributing
 

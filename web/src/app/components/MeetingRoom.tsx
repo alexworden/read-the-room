@@ -3,7 +3,7 @@ import { Meeting, Attendee, Comment, ATTENDEE_STATUS, REACTION_TYPE } from '../t
 import { io, Socket } from 'socket.io-client';
 import { debounce } from 'lodash';
 import { config } from '../config';
-import { FiCopy, FiMessageCircle } from 'react-icons/fi';
+import { FiCopy, FiMessageCircle, FiShare2 } from 'react-icons/fi';
 import { Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -36,6 +36,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
     confused: number;
     agree: number;
     disagree: number;
+    total: number;
   } | null>(null);
 
   const [transcription, setTranscription] = useState<string[]>([]);
@@ -48,8 +49,10 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
   const [newComment, setNewComment] = useState('');
   const commentsRef = useRef<HTMLDivElement>(null);
   const MAX_RETRIES = 3;
-  const joinUrl = `${window.location.origin}/join/${meeting.id}`;
+  const joinUrl = `${window.location.origin}/join/${meeting.meetingCode}`;
   const socketRef = useRef<Socket | null>(null);
+
+  const [activeReactions, setActiveReactions] = useState<Record<string, { type: string; timeoutId: number }>>({});
 
   // Scroll comments into view when new ones arrive
   useEffect(() => {
@@ -60,113 +63,180 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
 
   // Debounced stats update to prevent rapid UI updates
   const updateStats = useCallback(
-    debounce((newStats: Record<string, number>) => {
+    debounce((newStats: { inactive: number; engaged: number; confused: number; agree: number; disagree: number; total: number }) => {
+      console.log('Updating stats state:', newStats);
       setStats(newStats);
     }, 500),
     []
   );
+
+  // Clear reaction after 10 seconds
+  const clearReactionAfterDelay = useCallback((attendeeId: string) => {
+    const timeoutId = window.setTimeout(() => {
+      setActiveReactions(current => {
+        const { [attendeeId]: _, ...rest } = current;
+        return rest;
+      });
+    }, 10000);
+    return timeoutId;
+  }, []);
 
   useEffect(() => {
     const connectSocket = async () => {
       try {
         const socket = io(config.apiUrl, {
           transports: ['websocket'],
-          path: '/socket.io',
+          autoConnect: false
         });
 
         socketRef.current = socket;
 
-        socket.on('connect', () => {
+        socket.connect();
+        socket.emit('joinMeeting', {
+          meetingUuid: meeting.meetingUuid,
+          attendeeId: attendee.id
+        });
+
+        socket.on('joinedMeeting', (data: { currentStatus: string }) => {
           setIsConnecting(false);
-          socket.emit('joinMeeting', {
-            meetingId: meeting.id,
-            attendeeId: attendee.id
-          });
+          if (data?.currentStatus) {
+            setCurrentStatus(data.currentStatus);
+          }
         });
 
         socket.on('statusUpdated', ({ attendeeId, status }) => {
-          setAttendees((current) => 
-            current.map((a) => {
-              if (a.id === attendeeId) {
-                return { ...a, currentStatus: status };
-              }
-              return a;
-            })
+          setAttendees(current =>
+            current.map(a =>
+              a.id === attendeeId ? { ...a, currentStatus: status } : a
+            )
           );
         });
 
-        socket.on('reactionAdded', ({ attendeeId, reaction }) => {
-          setAttendees((current) => {
-            if (!current) return current;
-            return current.map((a) => {
-              if (a.id === attendeeId) {
-                return {
-                  ...a,
-                  reactions: [...(a.reactions || []), reaction]
-                };
-              }
-              return a;
-            });
-          });
-        });
-
-        socket.on('commentAdded', (comment) => {
-          setComments((current) => [...current, comment]);
-        });
-
-        socket.on('attendeesUpdated', (updatedAttendees) => {
+        socket.on('attendeesUpdated', (updatedAttendees: Attendee[]) => {
           setAttendees(updatedAttendees);
         });
 
-        socket.on('stats', (newStats) => {
-          setStats(newStats);
+        socket.on('commentsUpdated', (updatedComments: Comment[]) => {
+          setComments(updatedComments);
         });
 
-        socket.on('error', (error) => {
-          console.error('Socket error:', error);
+        socket.on('stats', (newStats: Record<string, number>) => {
+          console.log('Received stats update:', newStats);
+          // Ensure all required properties are present with default values
+          const formattedStats = {
+            inactive: newStats.inactive || 0,
+            engaged: newStats.engaged || 0,
+            confused: newStats.confused || 0,
+            agree: newStats.agree || 0,
+            disagree: newStats.disagree || 0,
+            total: newStats.total || 0
+          };
+          console.log('Formatted stats:', formattedStats);
+          updateStats(formattedStats);
+        });
+
+        socket.on('error', (error: { message: string }) => {
+          console.error('Socket error:', error.message);
+          if (retryCount < MAX_RETRIES) {
+            setRetryCount(prev => prev + 1);
+            setIsConnecting(true);
+            socket.connect();
+          }
         });
 
         socket.on('disconnect', () => {
           setIsConnecting(true);
-          if (retryCount < MAX_RETRIES) {
-            setRetryCount(prev => prev + 1);
-            connectSocket();
-          }
         });
 
-        // Fetch initial data
-        const [attendeesRes, commentsRes] = await Promise.all([
-          fetch(`${config.apiUrl}/api/meetings/${meeting.id}/attendees`),
-          fetch(`${config.apiUrl}/api/meetings/${meeting.id}/comments`)
-        ]);
+        // Set up heartbeat
+        const heartbeatInterval = setInterval(() => {
+          if (socket.connected) {
+            socket.emit('heartbeat', {
+              meetingUuid: meeting.meetingUuid,
+              attendeeId: attendee.id
+            });
+          }
+        }, 30000); // Send heartbeat every 30 seconds
 
-        if (attendeesRes.ok) {
-          const attendeesList = await attendeesRes.json();
-          setAttendees(attendeesList);
-        }
-
-        if (commentsRes.ok) {
-          const commentsList = await commentsRes.json();
-          setComments(commentsList);
-        }
-
+        return () => {
+          clearInterval(heartbeatInterval);
+          socket.emit('leaveMeeting', {
+            meetingUuid: meeting.meetingUuid,
+            attendeeId: attendee.id
+          });
+          socket.disconnect();
+        };
       } catch (error) {
-        console.error('Failed to connect:', error);
-        if (retryCount < MAX_RETRIES) {
-          setRetryCount(prev => prev + 1);
-          connectSocket();
-        }
+        console.error('Socket connection error:', error);
+        setIsConnecting(false);
       }
     };
 
     connectSocket();
+  }, [meeting.meetingUuid, attendee.id, retryCount]);
 
+  useEffect(() => {
     return () => {
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-      }
+      // Clear all timeouts on unmount
+      setActiveReactions(current => {
+        Object.values(current).forEach(reaction => {
+          window.clearTimeout(reaction.timeoutId);
+        });
+        return {};
+      });
     };
-  }, [meeting.id, attendee.id, retryCount]);
+  }, [setActiveReactions]);
+
+  const handleStatusChange = (status: string) => {
+    if (!socketRef.current?.connected) return;
+
+    setCurrentStatus(status);
+    socketRef.current.emit('updateStatus', {
+      meetingUuid: meeting.meetingUuid,
+      attendeeId: attendee.id,
+      status
+    });
+  };
+
+  const handleReaction = (type: string) => {
+    if (!socketRef.current?.connected) return;
+
+    console.log('Sending reaction:', type);
+    socketRef.current.emit('reaction', {
+      meetingUuid: meeting.meetingUuid,
+      attendeeId: attendee.id,
+      reaction: { type }
+    });
+
+    // Update local state immediately for responsive UI
+    setActiveReactions(current => {
+      const oldTimeoutId = current[attendee.id]?.timeoutId;
+      if (oldTimeoutId) {
+        window.clearTimeout(oldTimeoutId);
+      }
+      
+      return {
+        ...current,
+        [attendee.id]: {
+          type,
+          timeoutId: clearReactionAfterDelay(attendee.id)
+        }
+      };
+    });
+  };
+
+  const handleCommentSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newComment.trim() || !socketRef.current?.connected) return;
+
+    socketRef.current.emit('comment', {
+      meetingUuid: meeting.meetingUuid,
+      attendeeId: attendee.id,
+      content: newComment.trim()
+    });
+
+    setNewComment('');
+  };
 
   const updateStatus = async (status: string) => {
     if (!socketRef.current?.connected) {
@@ -176,52 +246,13 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
 
     try {
       socketRef.current.emit('updateStatus', {
-        meetingId: meeting.id,
+        meetingUuid: meeting.meetingUuid,
         attendeeId: attendee.id,
         status
       });
       setCurrentStatus(status);
     } catch (error) {
       console.error('Error sending status update:', error);
-    }
-  };
-
-  const addReaction = async (type: string) => {
-    if (!socketRef.current?.connected) {
-      console.error('Socket not connected');
-      return;
-    }
-
-    try {
-      const reaction: { type: string; timestamp: Date } = {
-        type,
-        timestamp: new Date()
-      };
-
-      socketRef.current.emit('addReaction', {
-        meetingId: meeting.id,
-        attendeeId: attendee.id,
-        reaction
-      });
-    } catch (error) {
-      console.error('Error sending reaction:', error);
-    }
-  };
-
-  const addComment = async () => {
-    if (!socketRef.current?.connected || !newComment.trim()) {
-      return;
-    }
-
-    try {
-      socketRef.current.emit('addComment', {
-        meetingId: meeting.id,
-        attendeeId: attendee.id,
-        content: newComment.trim()
-      });
-      setNewComment('');
-    } catch (error) {
-      console.error('Error sending comment:', error);
     }
   };
 
@@ -259,13 +290,42 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
     }
   };
 
+  const addComment = async () => {
+    if (!socketRef.current?.connected || !newComment.trim()) {
+      return;
+    }
+
+    try {
+      socketRef.current.emit('addComment', {
+        meetingUuid: meeting.meetingUuid,
+        attendeeId: attendee.id,
+        content: newComment.trim()
+      });
+      setNewComment('');
+    } catch (error) {
+      console.error('Error sending comment:', error);
+    }
+  };
+
   const chartData = {
-    labels: [ATTENDEE_STATUS.INACTIVE, ATTENDEE_STATUS.ENGAGED, ATTENDEE_STATUS.CONFUSED],
+    labels: [
+      ATTENDEE_STATUS.ENGAGED,
+      ATTENDEE_STATUS.CONFUSED,
+      ATTENDEE_STATUS.INACTIVE,
+      REACTION_TYPE.AGREE,
+      REACTION_TYPE.DISAGREE
+    ],
     datasets: [
       {
-        label: 'Attendee Status',
-        data: [stats?.inactive || 0, stats?.engaged || 0, stats?.confused || 0],
-        backgroundColor: ['#9CA3AF', '#10B981', '#FBBF24'],
+        label: 'Attendee Status & Reactions',
+        data: [
+          stats?.engaged || 0,
+          stats?.confused || 0,
+          stats?.inactive || 0,
+          stats?.agree || 0,
+          stats?.disagree || 0
+        ],
+        backgroundColor: ['#10B981', '#FBBF24', '#9CA3AF', '#3B82F6', '#EF4444'],
       }
     ]
   };
@@ -276,13 +336,24 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
     plugins: {
       legend: {
         display: false
+      },
+      tooltip: {
+        callbacks: {
+          label: function(context) {
+            const value = context.raw;
+            const total = stats?.total || 1;
+            const percentage = ((value / total) * 100).toFixed(1);
+            return `${value} (${percentage}%)`;
+          }
+        }
       }
     },
     scales: {
       y: {
         beginAtZero: true,
+        max: stats?.total || 5, // Set max scale to total attendees
         ticks: {
-          stepSize: 1
+          stepSize: Math.max(1, Math.floor((stats?.total || 5) / 5)) // Show about 5 tick marks
         }
       }
     }
@@ -290,105 +361,106 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
 
   return (
     <div className="space-y-4">
-      {/* Meeting Info and QR Code */}
-      <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
-        <div className="flex flex-col items-center mb-4">
-          <h2 className="text-xl sm:text-2xl font-semibold text-center">{meeting.title}</h2>
+      {/* Meeting Title, Share, and QR Code */}
+      <div className="flex items-center justify-between bg-white rounded-lg shadow-md p-4 sm:p-6">
+        <div className="flex items-center space-x-4">
+          <h1 className="text-2xl sm:text-3xl font-semibold">{meeting.title}</h1>
+          <button
+            onClick={() => window.open(joinUrl, '_blank')}
+            className="p-2 text-gray-600 hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+            title="Share meeting link"
+          >
+            <FiShare2 className="w-6 h-6" />
+          </button>
         </div>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between">
-          <div className="flex-1 text-center sm:text-left mb-4 sm:mb-0 sm:mr-6 min-w-0">
-            <div className="flex items-center justify-center sm:justify-start space-x-2 w-full">
-              <a
-                href={joinUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm p-2 text-blue-600 hover:text-blue-800 underline break-all"
-              >
-                {joinUrl}
-              </a>
-              <button
-                onClick={copyToClipboard}
-                className="p-2 text-gray-600 hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded flex-shrink-0"
-                title={showCopied ? 'Copied!' : 'Copy link'}
-              >
-                <FiCopy className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-          
-          <div className="flex-shrink-0 flex items-center justify-center">
-            <img
-              src={meeting.qrCode}
-              alt="QR Code"
-              className="w-32 h-32 sm:w-40 sm:h-40"
-            />
-          </div>
-        </div>
+        <img
+          src={meeting.qrCode}
+          alt="QR Code"
+          className="w-24 h-24 sm:w-32 sm:h-32 object-contain"
+        />
       </div>
 
       {/* Stats Chart */}
       <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
-        <h2 className="text-lg sm:text-xl font-semibold mb-4">Meeting Stats</h2>
         <div className="h-64">
           <Bar data={chartData} options={chartOptions} />
         </div>
       </div>
 
-      {/* Status Controls */}
+      {/* Status and Reactions */}
       <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
-        <h2 className="text-lg sm:text-xl font-semibold mb-2">{attendee.name}'s Status</h2>
-        <p className="text-sm text-gray-600 mb-4">How are you following the meeting?</p>
-        <div className="grid grid-cols-3 gap-4">
-          <button
-            onClick={() => updateStatus(ATTENDEE_STATUS.INACTIVE)}
-            className={`p-3 sm:p-4 rounded-lg text-center text-sm sm:text-base ${
-              currentStatus === ATTENDEE_STATUS.INACTIVE
-                ? 'bg-gray-600 text-white'
-                : 'bg-gray-100 hover:bg-gray-200'
-            }`}
-          >
-            Inactive
-          </button>
-          <button
-            onClick={() => updateStatus(ATTENDEE_STATUS.ENGAGED)}
-            className={`p-3 sm:p-4 rounded-lg text-center text-sm sm:text-base ${
-              currentStatus === ATTENDEE_STATUS.ENGAGED
-                ? 'bg-green-600 text-white'
-                : 'bg-green-100 hover:bg-green-200'
-            }`}
-          >
-            Engaged
-          </button>
-          <button
-            onClick={() => updateStatus(ATTENDEE_STATUS.CONFUSED)}
-            className={`p-3 sm:p-4 rounded-lg text-center text-sm sm:text-base ${
-              currentStatus === ATTENDEE_STATUS.CONFUSED
-                ? 'bg-yellow-600 text-white'
-                : 'bg-yellow-100 hover:bg-yellow-200'
-            }`}
-          >
-            Confused
-          </button>
-        </div>
-      </div>
+        <div className="flex items-center justify-between">
+          {/* Status */}
+          <div>
+            <h2 className="text-lg font-semibold mb-2">Status</h2>
+            <div className="flex justify-start space-x-4">
+              <button
+                onClick={() => handleStatusChange(ATTENDEE_STATUS.ENGAGED)}
+                className={`p-3 rounded-lg text-2xl ${
+                  currentStatus === ATTENDEE_STATUS.ENGAGED
+                    ? 'bg-green-100 ring-2 ring-green-400'
+                    : 'bg-white hover:bg-gray-100'
+                } transition-colors duration-200`}
+                title="Engaged"
+              >
+                😊
+              </button>
+              <button
+                onClick={() => handleStatusChange(ATTENDEE_STATUS.CONFUSED)}
+                className={`p-3 rounded-lg text-2xl ${
+                  currentStatus === ATTENDEE_STATUS.CONFUSED
+                    ? 'bg-yellow-100 ring-2 ring-yellow-400'
+                    : 'bg-white hover:bg-gray-100'
+                } transition-colors duration-200`}
+                title="Confused"
+              >
+                🤔
+              </button>
+              <button
+                onClick={() => handleStatusChange(ATTENDEE_STATUS.INACTIVE)}
+                className={`p-3 rounded-lg text-2xl ${
+                  currentStatus === ATTENDEE_STATUS.INACTIVE
+                    ? 'bg-gray-200 ring-2 ring-gray-400'
+                    : 'bg-white hover:bg-gray-100'
+                } transition-colors duration-200`}
+                title="Inactive"
+              >
+                😴
+              </button>
+            </div>
+          </div>
 
-      {/* Quick Reactions */}
-      <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
-        <h2 className="text-lg sm:text-xl font-semibold mb-2">Quick Reactions</h2>
-        <p className="text-sm text-gray-600 mb-4">React to what's being presented</p>
-        <div className="grid grid-cols-2 gap-4">
-          <button
-            onClick={() => addReaction(REACTION_TYPE.AGREE)}
-            className="p-3 sm:p-4 rounded-lg text-center text-sm sm:text-base bg-blue-100 hover:bg-blue-200"
-          >
-            Agree
-          </button>
-          <button
-            onClick={() => addReaction(REACTION_TYPE.DISAGREE)}
-            className="p-3 sm:p-4 rounded-lg text-center text-sm sm:text-base bg-red-100 hover:bg-red-200"
-          >
-            Disagree
-          </button>
+          {/* Vertical Divider */}
+          <div className="h-20 border-l border-gray-200 mx-6"></div>
+
+          {/* Reactions */}
+          <div>
+            <h2 className="text-lg font-semibold mb-2">Quick Reactions</h2>
+            <div className="flex justify-start space-x-4">
+              <button
+                onClick={() => handleReaction(REACTION_TYPE.AGREE)}
+                className={`p-3 rounded-lg text-2xl ${
+                  activeReactions[attendee.id]?.type === REACTION_TYPE.AGREE
+                    ? 'bg-blue-100 animate-pulse'
+                    : 'bg-white hover:bg-gray-100'
+                } transition-colors duration-200`}
+                title="Agree"
+              >
+                👍
+              </button>
+              <button
+                onClick={() => handleReaction(REACTION_TYPE.DISAGREE)}
+                className={`p-3 rounded-lg text-2xl ${
+                  activeReactions[attendee.id]?.type === REACTION_TYPE.DISAGREE
+                    ? 'bg-red-100 animate-pulse'
+                    : 'bg-white hover:bg-gray-100'
+                } transition-colors duration-200`}
+                title="Disagree"
+              >
+                👎
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -421,10 +493,10 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
             onChange={(e) => setNewComment(e.target.value)}
             placeholder="Type your comment..."
             className="flex-1 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            onKeyPress={(e) => e.key === 'Enter' && addComment()}
+            onKeyPress={(e) => e.key === 'Enter' && handleCommentSubmit(e)}
           />
           <button
-            onClick={addComment}
+            onClick={handleCommentSubmit}
             disabled={!newComment.trim()}
             className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >

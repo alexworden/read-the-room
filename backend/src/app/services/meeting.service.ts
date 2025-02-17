@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { MeetingRepository } from '../repositories/meeting.repository';
 import { Meeting, Attendee, StatusUpdate, MeetingStats, Comment } from '../types/meeting.types';
 import { QRService } from './qr.service';
@@ -15,102 +15,88 @@ export class MeetingService {
     this.logger = new Logger(MeetingService.name);
   }
 
+  private generateMeetingCode(): string {
+    // Generate a random 9-character code in XXX-XXX-XXX format
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let code = '';
+    
+    // Generate three groups of three characters
+    for (let group = 0; group < 3; group++) {
+      for (let i = 0; i < 3; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      // Add hyphen between groups, but not after the last group
+      if (group < 2) {
+        code += '-';
+      }
+    }
+    return code;
+  }
+
   async createMeeting(title: string): Promise<Meeting> {
     const meetingUuid = uuidv4();
-    const meetingId = this.generateMeetingId();
-    const meeting = await this.meetingRepository.createMeeting(title, meetingUuid, meetingId);
-    const qrCode = await this.qrService.generateQRCode(meetingId);
-    await this.meetingRepository.updateMeetingQrCode(meetingId, qrCode);
-    return this.getMeeting(meetingId);
+    const meetingCode = this.generateMeetingCode();
+    const qrCode = await this.qrService.generateQRCode(meetingCode);
+    return this.meetingRepository.createMeeting(title, meetingUuid, meetingCode, qrCode);
   }
 
-  async getMeeting(meetingId: string): Promise<Meeting | null> {
-    return this.meetingRepository.getMeeting(meetingId);
+  async getMeeting(meetingCode: string): Promise<Meeting | null> {
+    return this.meetingRepository.getMeeting(meetingCode);
   }
 
-  async addAttendee(meetingId: string, name: string): Promise<Attendee> {
-    return this.meetingRepository.addAttendee(meetingId, name);
+  async addAttendee(meetingCode: string, name: string): Promise<Attendee> {
+    const meeting = await this.getMeeting(meetingCode);
+    if (!meeting) {
+      throw new NotFoundException('Meeting not found');
+    }
+    return this.meetingRepository.addAttendee(meeting.meetingUuid, name);
   }
 
   async getAttendee(attendeeId: string): Promise<Attendee & { currentStatus?: string }> {
     return this.meetingRepository.getAttendee(attendeeId);
   }
 
-  async getMeetingAttendees(meetingId: string): Promise<Attendee[]> {
-    return this.meetingRepository.getMeetingAttendees(meetingId);
+  async getMeetingAttendees(meetingUuid: string): Promise<Attendee[]> {
+    return this.meetingRepository.getMeetingAttendees(meetingUuid);
   }
 
-  async updateAttendeeStatus(attendeeId: string, meetingId: string, status: string): Promise<void> {
-    this.logger.log(`Updating attendee status in service - Meeting: ${meetingId}, Attendee: ${attendeeId}, Status: ${status}`);
-    
-    try {
-      // Update current status
-      this.logger.log('Updating current status in database...');
-      await this.meetingRepository.updateAttendeeStatus(attendeeId, meetingId, status);
-      
-      // Record status update
-      this.logger.log('Recording status update history...');
-      await this.meetingRepository.addStatusUpdate(attendeeId, meetingId, status);
-      
-      this.logger.log('Status update completed successfully');
-    } catch (error) {
-      this.logger.error('Error updating attendee status:', error);
-      throw error;
-    }
+  async updateAttendeeStatus(attendeeId: string, meetingUuid: string, status: string): Promise<void> {
+    this.logger.log(`Updating attendee status - Meeting: ${meetingUuid}, Attendee: ${attendeeId}, Status: ${status}`);
+    await this.meetingRepository.updateAttendeeStatus(attendeeId, meetingUuid, status);
   }
 
-  async updateAttendeeHeartbeat(attendeeId: string, meetingId: string): Promise<void> {
-    await this.meetingRepository.updateAttendeeHeartbeat(attendeeId, meetingId);
+  async updateAttendeeHeartbeat(attendeeId: string, meetingUuid: string): Promise<void> {
+    await this.meetingRepository.updateAttendeeHeartbeat(attendeeId, meetingUuid);
   }
 
-  async updateMeetingQrCode(meetingId: string, qrCode: string): Promise<void> {
-    await this.meetingRepository.updateMeetingQrCode(meetingId, qrCode);
+  async getMeetingStats(meetingUuid: string): Promise<MeetingStats> {
+    return this.meetingRepository.getMeetingStats(meetingUuid);
   }
 
-  async generateQRCode(meetingId: string): Promise<string> {
-    return this.qrService.generateQRCode(meetingId);
+  async getAttendeeStatusHistory(attendeeId: string, meetingUuid: string): Promise<StatusUpdate[]> {
+    return this.meetingRepository.getStatusHistory(attendeeId, meetingUuid);
   }
 
-  async getMeetingStats(meetingId: string): Promise<MeetingStats> {
-    this.logger.log(`Fetching stats for meeting ${meetingId}`);
-    try {
-      const attendees = await this.meetingRepository.getAttendees(meetingId);
-      const stats = {
-        total: attendees.length,
-        inactive: attendees.filter(a => a.currentStatus === 'inactive').length,
-        engaged: attendees.filter(a => a.currentStatus === 'engaged').length,
-        confused: attendees.filter(a => a.currentStatus === 'confused').length
-      };
-      this.logger.log(`Retrieved stats for meeting ${meetingId}:`, stats);
-      return stats;
-    } catch (error) {
-      this.logger.error(`Error fetching stats for meeting ${meetingId}:`, error);
-      throw error;
-    }
+  async getComments(meetingUuid: string): Promise<Comment[]> {
+    return this.meetingRepository.getComments(meetingUuid);
   }
 
-  async getAttendeeStatusHistory(attendeeId: string, meetingId: string): Promise<StatusUpdate[]> {
-    return this.meetingRepository.getStatusHistory(attendeeId, meetingId);
+  async addComment(attendeeId: string, meetingUuid: string, content: string): Promise<Comment> {
+    return this.meetingRepository.addComment(attendeeId, meetingUuid, content);
   }
 
-  async getComments(meetingId: string): Promise<Comment[]> {
-    return this.meetingRepository.getComments(meetingId);
+  async addReaction(attendeeId: string, meetingUuid: string, type: string): Promise<void> {
+    const expiresAt = new Date();
+    expiresAt.setSeconds(expiresAt.getSeconds() + 10); // 10 second expiration
+    this.logger.log(`Adding reaction - Meeting: ${meetingUuid}, Attendee: ${attendeeId}, Type: ${type}`);
+    await this.meetingRepository.addReaction(attendeeId, meetingUuid, type, expiresAt);
   }
 
-  async addComment(attendeeId: string, meetingId: string, content: string): Promise<Comment> {
-    return this.meetingRepository.addComment(attendeeId, meetingId, content);
+  async getReactionCounts(meetingUuid: string): Promise<{ [key: string]: number }> {
+    return this.meetingRepository.getActiveReactionCounts(meetingUuid);
   }
 
-  private generateSection(): string {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let section = '';
-    for (let i = 0; i < 3; i++) {
-      section += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return section;
-  }
-
-  private generateMeetingId(): string {
-    return `${this.generateSection()}-${this.generateSection()}-${this.generateSection()}`;
+  async generateQRCode(meetingCode: string): Promise<string> {
+    return this.qrService.generateQRCode(meetingCode);
   }
 }

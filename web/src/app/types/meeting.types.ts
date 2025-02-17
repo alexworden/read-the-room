@@ -13,8 +13,8 @@ export type AttendeeStatus = typeof ATTENDEE_STATUS[keyof typeof ATTENDEE_STATUS
 export type ReactionType = typeof REACTION_TYPE[keyof typeof REACTION_TYPE];
 
 export interface Meeting {
-  id: string;
-  uuid: string;
+  meetingCode: string;
+  meetingUuid: string;
   title: string;
   createdAt: string;
   updatedAt: string;
@@ -27,10 +27,9 @@ export interface Meeting {
 export interface Attendee {
   id: string;
   name: string;
-  meetingId: string;
+  meetingUuid: string;
   currentStatus?: AttendeeStatus;
   statusHistory?: StatusUpdate[];
-  reactions?: Reaction[];
   lastSeen?: Date;
   isHost?: boolean;
   createdAt: string;

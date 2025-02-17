@@ -1,36 +1,37 @@
 export interface Meeting {
-  meeting_uuid: string;
-  meeting_id: string;
+  meetingUuid: string;
+  meetingCode: string;
   title: string;
-  qr_code?: string;
-  created_at: Date;
-  updated_at: Date;
-  attendees: Attendee[];
+  qrCode?: string | null;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface Attendee {
   id: string;
-  meeting_id: string;
+  meetingUuid: string;
   name: string;
-  created_at: Date;
-  currentStatus: string;
-  statusHistory: StatusUpdate[];
+  createdAt: Date;
+  updatedAt: Date;
+  currentStatus?: string;
 }
 
 export interface AttendeeCurrentStatus {
-  attendee_id: string;
-  meeting_id: string;
+  attendeeId: string;
+  meetingUuid: string;
   status: string;
-  last_heartbeat: Date;
+  lastHeartbeat: Date;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface StatusUpdate {
   id: string;
-  attendee_id: string;
-  meeting_id: string;
+  attendeeId: string;
+  meetingUuid: string;
   status: string;
   context?: string;
-  created_at: Date;
+  createdAt: Date;
 }
 
 export interface MeetingStats {
@@ -38,16 +39,18 @@ export interface MeetingStats {
   inactive: number;
   engaged: number;
   confused: number;
+  agree: number;
+  disagree: number;
 }
 
 export interface Comment {
   id: string;
-  attendee_id: string;
-  meeting_id: string;
+  attendeeId: string;
+  meetingUuid: string;
   content: string;
-  created_at: Date;
-  updated_at: Date;
-  attendee_name?: string; // Added when joining with attendees table
+  createdAt: Date;
+  updatedAt: Date;
+  attendeeName?: string; // Added when joining with attendees table
 }
 
 export const AttendeeStatus = {

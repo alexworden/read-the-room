@@ -10,13 +10,21 @@ interface JoinMeetingProps {
 export const JoinMeeting: React.FC<JoinMeetingProps> = ({ meeting, onJoined }) => {
   const [name, setName] = useState('');
   const [showCopied, setShowCopied] = useState(false);
-  const joinUrl = `${window.location.origin}/join/${meeting.id}`;
+  const joinUrl = `${window.location.origin}/join/${meeting.meeting_code}`;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     try {
-      const response = await fetch(`${config.apiUrl}/api/meetings/${meeting.id}/attendees`, {
+      // First get the meeting details
+      const meetingRes = await fetch(`${config.apiUrl}/api/meetings/${meeting.meeting_code}`);
+      if (!meetingRes.ok) {
+        throw new Error('Meeting not found');
+      }
+      const meeting = await meetingRes.json();
+
+      // Then join as an attendee
+      const attendeeRes = await fetch(`${config.apiUrl}/api/meetings/${meeting.meeting_uuid}/attendees`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -24,10 +32,12 @@ export const JoinMeeting: React.FC<JoinMeetingProps> = ({ meeting, onJoined }) =
         body: JSON.stringify({ name }),
       });
 
-      if (response.ok) {
-        const attendeeData = await response.json();
+      if (attendeeRes.ok) {
+        const attendeeData = await attendeeRes.json();
         onJoined(attendeeData);
         setName('');
+      } else {
+        throw new Error('Failed to join meeting');
       }
     } catch (error) {
       console.error('Failed to join meeting:', error);

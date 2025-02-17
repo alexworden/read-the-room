@@ -16,24 +16,25 @@ export class AttendeeRepository {
     return result.rows[0];
   }
 
-  async addAttendeeToMeeting(attendeeId: string, meetingId: string): Promise<AttendeeCurrentStatus> {
-    const meetingResult = await this.db.query(
-      'SELECT id FROM meetings WHERE id = $1',
-      [meetingId]
+  async addAttendeeToMeeting(attendeeId: string, meeting_uuid: string): Promise<AttendeeCurrentStatus> {
+    const meetingExists = await this.db.query(
+      'SELECT 1 FROM meetings WHERE meeting_uuid = $1',
+      [meeting_uuid]
     );
 
-    if (meetingResult.rows.length === 0) {
-      throw new Error(`Meeting with ID ${meetingId} not found`);
+    if (!meetingExists.rowCount) {
+      throw new Error(`Meeting with UUID ${meeting_uuid} not found`);
     }
 
     const id = uuidv4();
     const result = await this.db.query<AttendeeCurrentStatus>(
-      'INSERT INTO attendee_current_status (id, attendee_id, meeting_id, status, last_heartbeat) ' +
+      'INSERT INTO attendee_current_status (id, attendee_id, meeting_uuid, status, last_heartbeat) ' +
       'VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP) ' +
-      'ON CONFLICT (attendee_id, meeting_id) DO UPDATE SET last_heartbeat = CURRENT_TIMESTAMP ' +
+      'ON CONFLICT (attendee_id, meeting_uuid) DO UPDATE SET last_heartbeat = CURRENT_TIMESTAMP ' +
       'RETURNING *',
-      [id, attendeeId, meetingId, 'engaged']
+      [id, attendeeId, meeting_uuid, 'engaged']
     );
+
     return result.rows[0];
   }
 
@@ -49,49 +50,50 @@ export class AttendeeRepository {
     return result.rows[0] || null;
   }
 
-  async updateAttendeeStatus(attendeeId: string, meetingId: string, status: string): Promise<void> {
+  async updateAttendeeStatus(attendeeId: string, meeting_uuid: string, status: string): Promise<void> {
     if (!isUUID(attendeeId)) {
       throw new Error(`Invalid attendee ID format: ${attendeeId}`);
     }
 
     const result = await this.db.query(
-      'UPDATE attendee_current_status SET status = $1, last_heartbeat = CURRENT_TIMESTAMP ' +
-      'WHERE attendee_id = $2 AND meeting_id = $3',
-      [status, attendeeId, meetingId]
+      'UPDATE attendee_current_status ' +
+      'SET status = $1, updated_at = CURRENT_TIMESTAMP ' +
+      'WHERE attendee_id = $2 AND meeting_uuid = $3',
+      [status, attendeeId, meeting_uuid]
     );
 
     if (result.rowCount === 0) {
-      throw new Error(`Attendee ${attendeeId} not found in meeting ${meetingId}`);
+      throw new Error(`Attendee ${attendeeId} not found in meeting ${meeting_uuid}`);
     }
   }
 
-  async updateAttendeeHeartbeat(attendeeId: string, meetingId: string): Promise<void> {
+  async updateAttendeeHeartbeat(attendeeId: string, meeting_uuid: string): Promise<void> {
     const result = await this.db.query(
       'UPDATE attendee_current_status SET last_heartbeat = CURRENT_TIMESTAMP ' +
-      'WHERE attendee_id = $1 AND meeting_id = $2',
-      [attendeeId, meetingId]
+      'WHERE attendee_id = $1 AND meeting_uuid = $2',
+      [attendeeId, meeting_uuid]
     );
 
     if (result.rowCount === 0) {
-      throw new Error(`Attendee ${attendeeId} not found in meeting ${meetingId}`);
+      throw new Error(`Attendee ${attendeeId} not found in meeting ${meeting_uuid}`);
     }
   }
 
-  async getMeetingAttendees(meetingId: string): Promise<(Attendee & { current_status: string })[]> {
+  async getMeetingAttendees(meeting_uuid: string): Promise<(Attendee & { current_status: string })[]> {
     const result = await this.db.query(
       'SELECT a.*, acs.status as current_status ' +
       'FROM attendees a ' +
-      'JOIN attendee_current_status acs ON a.id = acs.attendee_id ' +
-      'WHERE acs.meeting_id = $1',
-      [meetingId]
+      'LEFT JOIN attendee_current_status acs ON a.id = acs.attendee_id ' +
+      'WHERE acs.meeting_uuid = $1',
+      [meeting_uuid]
     );
     return result.rows;
   }
 
-  async getAttendeeCurrentStatus(attendeeId: string, meetingId: string): Promise<AttendeeCurrentStatus | null> {
+  async getAttendeeCurrentStatus(attendeeId: string, meeting_uuid: string): Promise<AttendeeCurrentStatus | null> {
     const result = await this.db.query<AttendeeCurrentStatus>(
-      'SELECT * FROM attendee_current_status WHERE attendee_id = $1 AND meeting_id = $2',
-      [attendeeId, meetingId]
+      'SELECT * FROM attendee_current_status WHERE attendee_id = $1 AND meeting_uuid = $2',
+      [attendeeId, meeting_uuid]
     );
     return result.rows[0] || null;
   }

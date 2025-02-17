@@ -1,67 +1,83 @@
--- Drop tables if they exist
-DROP TABLE IF EXISTS transcriptions;
-DROP TABLE IF EXISTS status_updates;
-DROP TABLE IF EXISTS attendee_current_status;
-DROP TABLE IF EXISTS attendees;
-DROP TABLE IF EXISTS meetings;
-DROP TABLE IF EXISTS comments;
+-- Drop tables in the correct order
+DROP TABLE IF EXISTS reactions CASCADE;
+DROP TABLE IF EXISTS comments CASCADE;
+DROP TABLE IF EXISTS status_updates CASCADE;
+DROP TABLE IF EXISTS attendee_current_status CASCADE;
+DROP TABLE IF EXISTS attendees CASCADE;
+DROP TABLE IF EXISTS meetings CASCADE;
+
+-- Enable UUID extension
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Create meetings table
-CREATE TABLE meetings (
-  meeting_uuid UUID PRIMARY KEY,
-  meeting_id TEXT UNIQUE NOT NULL,
-  title TEXT NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-  qr_code TEXT
+CREATE TABLE IF NOT EXISTS meetings (
+    meeting_uuid UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    meeting_code VARCHAR(50) UNIQUE NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    qr_code TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Create attendees table
-CREATE TABLE attendees (
-  id UUID PRIMARY KEY,
-  meeting_id TEXT REFERENCES meetings(meeting_id) ON DELETE CASCADE,
-  name TEXT NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+CREATE TABLE IF NOT EXISTS attendees (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    meeting_uuid UUID NOT NULL REFERENCES meetings(meeting_uuid) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Create attendee_current_status table
-CREATE TABLE attendee_current_status (
-  attendee_id UUID REFERENCES attendees(id) ON DELETE CASCADE,
-  meeting_id TEXT REFERENCES meetings(meeting_id) ON DELETE CASCADE,
-  status TEXT DEFAULT 'engaged',
-  last_heartbeat TIMESTAMPTZ DEFAULT NOW(),
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-  PRIMARY KEY (attendee_id, meeting_id)
+CREATE TABLE IF NOT EXISTS attendee_current_status (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    attendee_id UUID NOT NULL REFERENCES attendees(id) ON DELETE CASCADE,
+    meeting_uuid UUID NOT NULL REFERENCES meetings(meeting_uuid) ON DELETE CASCADE,
+    status VARCHAR(50) NOT NULL,
+    last_heartbeat TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Create status_updates table
-CREATE TABLE status_updates (
-  id UUID PRIMARY KEY,
-  attendee_id UUID REFERENCES attendees(id) ON DELETE CASCADE,
-  meeting_id TEXT REFERENCES meetings(meeting_id) ON DELETE CASCADE,
-  status TEXT NOT NULL,
-  context TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+CREATE TABLE IF NOT EXISTS status_updates (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    attendee_id UUID NOT NULL REFERENCES attendees(id) ON DELETE CASCADE,
+    meeting_uuid UUID NOT NULL REFERENCES meetings(meeting_uuid) ON DELETE CASCADE,
+    status VARCHAR(50) NOT NULL,
+    context TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Create comments table
-CREATE TABLE comments (
-  id UUID PRIMARY KEY,
-  attendee_id UUID REFERENCES attendees(id) ON DELETE CASCADE,
-  meeting_id TEXT REFERENCES meetings(meeting_id) ON DELETE CASCADE,
-  content TEXT NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+CREATE TABLE IF NOT EXISTS comments (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    attendee_id UUID NOT NULL REFERENCES attendees(id) ON DELETE CASCADE,
+    meeting_uuid UUID NOT NULL REFERENCES meetings(meeting_uuid) ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create reactions table
+CREATE TABLE IF NOT EXISTS reactions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    attendee_id UUID NOT NULL REFERENCES attendees(id) ON DELETE CASCADE,
+    meeting_uuid UUID NOT NULL REFERENCES meetings(meeting_uuid) ON DELETE CASCADE,
+    type VARCHAR(50) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL
 );
 
 -- Create indexes for performance
-CREATE INDEX idx_meetings_meeting_id ON meetings(meeting_id);
-CREATE INDEX idx_attendees_meeting_id ON attendees(meeting_id);
-CREATE INDEX idx_attendee_current_status_meeting_id ON attendee_current_status(meeting_id);
-CREATE INDEX idx_status_updates_meeting_id ON status_updates(meeting_id);
-CREATE INDEX idx_comments_meeting_id ON comments(meeting_id);
+CREATE INDEX idx_meetings_meeting_code ON meetings(meeting_code);
+CREATE INDEX idx_attendees_meeting_uuid ON attendees(meeting_uuid);
+CREATE INDEX idx_attendee_current_status_meeting_uuid ON attendee_current_status(meeting_uuid);
+CREATE INDEX idx_status_updates_meeting_uuid ON status_updates(meeting_uuid);
+CREATE INDEX idx_comments_meeting_uuid ON comments(meeting_uuid);
+CREATE INDEX IF NOT EXISTS reactions_meeting_uuid_idx ON reactions(meeting_uuid);
+CREATE INDEX IF NOT EXISTS reactions_attendee_id_idx ON reactions(attendee_id);
+CREATE INDEX IF NOT EXISTS reactions_expires_at_idx ON reactions(expires_at);
 
 -- Create function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()

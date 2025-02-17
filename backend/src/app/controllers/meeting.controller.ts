@@ -16,51 +16,41 @@ export class MeetingController {
     return this.meetingService.createMeeting(body.title);
   }
 
-  @Get(':id')
-  async getMeeting(@Param('id') id: string): Promise<Meeting> {
-    const meeting = await this.meetingService.getMeeting(id);
+  @Get(':code')
+  async getMeeting(@Param('code') code: string): Promise<Meeting> {
+    const meeting = await this.meetingService.getMeeting(code);
     if (!meeting) {
       throw new NotFoundException('Meeting not found');
     }
     return meeting;
   }
 
-  @Get(':id/qr')
-  async getMeetingQR(@Param('id') id: string): Promise<{ qrCode: string }> {
-    const meeting = await this.meetingService.getMeeting(id);
+  @Get(':code/qr')
+  async getMeetingQR(@Param('code') code: string): Promise<{ qrCode: string }> {
+    const meeting = await this.meetingService.getMeeting(code);
     if (!meeting) {
       throw new NotFoundException('Meeting not found');
     }
-    if (!meeting.qr_code) {
-      // Generate QR code if it doesn't exist
-      const qrCode = await this.meetingService.generateQRCode(id);
-      await this.meetingService.updateMeetingQrCode(id, qrCode);
-      return { qrCode };
+    if (!meeting.qrCode) {
+      throw new BadRequestException('Meeting QR code not found');
     }
-    return { qrCode: meeting.qr_code };
+    return { qrCode: meeting.qrCode };
   }
 
-  @Post(':id/attendees')
+  @Post(':code/attendees')
   async addAttendee(
-    @Param('id') id: string,
+    @Param('code') code: string,
     @Body() body: { name: string },
   ): Promise<Attendee> {
-    try {
-      return await this.meetingService.addAttendee(id, body.name);
-    } catch (error) {
-      if (error.message === 'Meeting does not exist') {
-        throw new NotFoundException('Meeting not found');
-      }
-      throw error;
-    }
+    return await this.meetingService.addAttendee(code, body.name);
   }
 
-  @Put(':id/attendees/:attendeeId/heartbeat')
+  @Put(':code/attendees/:attendeeId/heartbeat')
   async updateAttendeeHeartbeat(
-    @Param('id') id: string,
+    @Param('code') code: string,
     @Param('attendeeId') attendeeId: string,
   ): Promise<{ success: boolean }> {
-    const meeting = await this.meetingService.getMeeting(id);
+    const meeting = await this.meetingService.getMeeting(code);
     if (!meeting) {
       throw new NotFoundException('Meeting not found');
     }
@@ -70,33 +60,98 @@ export class MeetingController {
       throw new NotFoundException('Attendee not found');
     }
 
-    await this.meetingService.updateAttendeeHeartbeat(attendeeId, id);
+    await this.meetingService.updateAttendeeHeartbeat(attendeeId, meeting.meetingUuid);
     return { success: true };
   }
 
-  @Get(':id/stats')
-  async getMeetingStats(@Param('id') id: string): Promise<MeetingStats> {
-    return this.meetingService.getMeetingStats(id);
+  @Get(':code/stats')
+  async getMeetingStats(@Param('code') code: string): Promise<MeetingStats> {
+    const meeting = await this.meetingService.getMeeting(code);
+    if (!meeting) {
+      throw new NotFoundException('Meeting not found');
+    }
+    return this.meetingService.getMeetingStats(meeting.meetingUuid);
   }
 
-  @Get(':id/attendees')
-  async getMeetingAttendees(@Param('id') id: string) {
-    return this.meetingService.getMeetingAttendees(id);
+  @Get(':code/attendees')
+  async getMeetingAttendees(@Param('code') code: string): Promise<Attendee[]> {
+    const meeting = await this.meetingService.getMeeting(code);
+    if (!meeting) {
+      throw new NotFoundException('Meeting not found');
+    }
+    return this.meetingService.getMeetingAttendees(meeting.meetingUuid);
   }
 
-  @Get(':id/comments')
-  async getMeetingComments(@Param('id') id: string) {
-    return this.meetingService.getComments(id);
+  @Get(':code/comments')
+  async getMeetingComments(@Param('code') code: string) {
+    const meeting = await this.meetingService.getMeeting(code);
+    if (!meeting) {
+      throw new NotFoundException('Meeting not found');
+    }
+    return this.meetingService.getComments(meeting.meetingUuid);
   }
 
-  @Post(':id/comments')
+  @Post(':code/comments')
   async addComment(
-    @Param('id') id: string,
+    @Param('code') code: string,
     @Body() body: { attendeeId: string; content: string },
   ) {
     if (!body.attendeeId || !body.content) {
-      throw new BadRequestException('Attendee ID and content are required');
+      throw new BadRequestException('AttendeeId and content are required');
     }
-    return this.meetingService.addComment(body.attendeeId, id, body.content);
+
+    const meeting = await this.meetingService.getMeeting(code);
+    if (!meeting) {
+      throw new NotFoundException('Meeting not found');
+    }
+
+    return this.meetingService.addComment(body.attendeeId, meeting.meetingUuid, body.content);
+  }
+
+  @Post(':code/attendees/:attendeeId/reactions')
+  async addReaction(
+    @Param('code') code: string,
+    @Param('attendeeId') attendeeId: string,
+    @Body() body: { type: string },
+  ) {
+    if (!body.type) {
+      throw new BadRequestException('Type is required');
+    }
+
+    const meeting = await this.meetingService.getMeeting(code);
+    if (!meeting) {
+      throw new NotFoundException('Meeting not found');
+    }
+
+    await this.meetingService.addReaction(attendeeId, meeting.meetingUuid, body.type);
+    return { success: true };
+  }
+
+  @Get(':code/reactions')
+  async getReactionCounts(@Param('code') code: string) {
+    const meeting = await this.meetingService.getMeeting(code);
+    if (!meeting) {
+      throw new NotFoundException('Meeting not found');
+    }
+    return this.meetingService.getReactionCounts(meeting.meetingUuid);
+  }
+
+  @Put(':code/attendees/:attendeeId/status')
+  async updateAttendeeStatus(
+    @Param('code') code: string,
+    @Param('attendeeId') attendeeId: string,
+    @Body() body: { status: string; context?: string },
+  ) {
+    if (!body.status) {
+      throw new BadRequestException('Status is required');
+    }
+
+    const meeting = await this.meetingService.getMeeting(code);
+    if (!meeting) {
+      throw new NotFoundException('Meeting not found');
+    }
+
+    await this.meetingService.updateAttendeeStatus(attendeeId, meeting.meetingUuid, body.status);
+    return { success: true };
   }
 }

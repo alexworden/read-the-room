@@ -14,7 +14,7 @@ const CreateMeetingWrapper = () => {
   const handleMeetingCreated = async (newMeeting: Meeting, attendeeName: string) => {
     try {
       // Join the meeting as the creator
-      const joinResponse = await fetch(`${config.apiUrl}/api/meetings/${newMeeting.id}/attendees`, {
+      const joinResponse = await fetch(`${config.apiUrl}/api/meetings/${newMeeting.meetingCode}/attendees`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -30,7 +30,7 @@ const CreateMeetingWrapper = () => {
       const attendee = convertAttendeeData(attendeeData);
 
       // Navigate directly to the meeting room
-      navigate(`/room/${newMeeting.id}`, { 
+      navigate(`/room/${newMeeting.meetingCode}`, { 
         state: { 
           meeting: newMeeting,
           attendee: attendee
@@ -39,7 +39,7 @@ const CreateMeetingWrapper = () => {
     } catch (error) {
       console.error('Failed to join meeting:', error);
       // If join fails, navigate to join page as fallback
-      navigate(`/join/${newMeeting.id}`, { state: { meeting: newMeeting } });
+      navigate(`/join/${newMeeting.meetingCode}`, { state: { meeting: newMeeting } });
     }
   };
 
@@ -80,7 +80,8 @@ const JoinMeetingWrapper = () => {
           title: meetingData.title,
           createdAt: meetingData.created_at,
           updatedAt: meetingData.updated_at,
-          qrCode: meetingData.qr_code
+          qrCode: meetingData.qr_code,
+          meetingCode: meetingData.meeting_code
         };
 
         setMeeting(meeting);
@@ -117,7 +118,7 @@ const JoinMeetingWrapper = () => {
 
   const handleJoined = async (attendeeData: any) => {
     const attendee = convertAttendeeData(attendeeData);
-    navigate(`/room/${meeting.id}`, { state: { meeting, attendee } });
+    navigate(`/room/${meeting.meetingCode}`, { state: { meeting, attendee } });
   };
 
   return <JoinMeeting meeting={meeting} onJoined={handleJoined} />;

@@ -1,5 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { Meeting, Attendee, StatusUpdate, MeetingStats, Comment } from '../types/meeting.types';
+import { DbMeeting, DbAttendee, DbAttendeeStatus, DbComment } from '../types/database.types';
+import { DatabaseMapper } from '../mappers/database.mapper';
 import { DatabaseService } from '../services/database.service';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -7,196 +9,291 @@ import { v4 as uuidv4 } from 'uuid';
 export class MeetingRepository {
   constructor(private db: DatabaseService) {}
 
-  async createMeeting(title: string, meetingUuid: string, meetingId: string): Promise<Meeting> {
-    // Check if meeting_id already exists
-    const existingMeeting = await this.db.query<Meeting>(
-      'SELECT * FROM meetings WHERE meeting_id = $1',
-      [meetingId]
+  async createMeeting(title: string, meetingUuid: string, meetingCode: string, qrCode: string): Promise<Meeting> {
+    // Check if meeting code already exists
+    const existingMeeting = await this.db.query<{ meeting_code: string }>(
+      'SELECT meeting_code FROM meetings WHERE meeting_code = $1',
+      [meetingCode]
     );
     if (existingMeeting.rows.length > 0) {
-      throw new Error('Meeting ID already exists');
+      throw new ConflictException('Meeting code already exists');
     }
 
-    const result = await this.db.query<Meeting>(
-      'INSERT INTO meetings (meeting_uuid, meeting_id, title, created_at, updated_at) VALUES ($1, $2, $3, NOW(), NOW()) RETURNING *',
-      [meetingUuid, meetingId, title]
+    const result = await this.db.query<DbMeeting>(
+      'INSERT INTO meetings (meeting_uuid, meeting_code, title, qr_code, created_at, updated_at) VALUES ($1, $2, $3, $4, NOW(), NOW()) RETURNING *',
+      [meetingUuid, meetingCode, title, qrCode]
     );
-    return result.rows[0];
+
+    return DatabaseMapper.toMeeting(result.rows[0]);
   }
 
-  async getMeeting(meetingId: string): Promise<Meeting | null> {
-    const result = await this.db.query<Meeting>(
-      'SELECT * FROM meetings WHERE meeting_id = $1',
-      [meetingId]
+  async getMeeting(meetingCode: string): Promise<Meeting | null> {
+    const result = await this.db.query<DbMeeting>(
+      'SELECT * FROM meetings WHERE meeting_code = $1',
+      [meetingCode]
     );
     if (result.rows.length === 0) {
       return null;
     }
-    return result.rows[0];
+    return DatabaseMapper.toMeeting(result.rows[0]);
   }
 
-  async addAttendee(meetingId: string, name: string): Promise<Attendee> {
-    // Check if meeting exists
-    const meeting = await this.getMeeting(meetingId);
-    if (!meeting) {
-      throw new Error('Meeting not found');
-    }
-
+  async addAttendee(meetingUuid: string, name: string): Promise<Attendee> {
     const attendeeId = uuidv4();
-    const result = await this.db.query<Attendee>(
-      'INSERT INTO attendees (id, meeting_id, name) VALUES ($1, $2, $3) RETURNING *',
-      [attendeeId, meetingId, name]
+    const result = await this.db.query<DbAttendee>(
+      'INSERT INTO attendees (id, meeting_uuid, name, created_at, updated_at) VALUES ($1, $2, $3, NOW(), NOW()) RETURNING *',
+      [attendeeId, meetingUuid, name]
     );
 
     // Create initial status
     await this.db.query(
-      'INSERT INTO attendee_current_status (attendee_id, meeting_id, status) VALUES ($1, $2, $3)',
-      [attendeeId, meetingId, 'engaged']
+      'INSERT INTO attendee_current_status (attendee_id, meeting_uuid, status, last_heartbeat, created_at, updated_at) VALUES ($1, $2, $3, NOW(), NOW(), NOW())',
+      [attendeeId, meetingUuid, 'engaged']
     );
 
-    return result.rows[0];
+    return DatabaseMapper.toAttendee(result.rows[0], 'engaged');
   }
 
   async getAttendee(attendeeId: string): Promise<Attendee & { currentStatus?: string }> {
-    const result = await this.db.query<Attendee>(
-      'SELECT a.*, acs.status as current_status FROM attendees a LEFT JOIN attendee_current_status acs ON a.id = acs.attendee_id WHERE a.id = $1',
+    const result = await this.db.query<{
+      id: string;
+      meeting_uuid: string;
+      name: string;
+      created_at: Date;
+      updated_at: Date;
+      current_status?: string;
+    }>(
+      `SELECT a.*, acs.status as current_status 
+       FROM attendees a
+       LEFT JOIN attendee_current_status acs ON a.id = acs.attendee_id
+       WHERE a.id = $1`,
       [attendeeId]
     );
     if (result.rows.length === 0) {
-      throw new Error('Attendee not found');
+      return null;
     }
     const attendee = result.rows[0];
-    return {
-      ...attendee,
-      currentStatus: result.rows[0].current_status
-    };
+    return DatabaseMapper.toAttendeeWithStatus(attendee);
   }
 
-  async getAttendees(meetingId: string): Promise<Array<Attendee & { currentStatus: string }>> {
-    const result = await this.db.query<Attendee & { current_status: string | null }>(
-      'SELECT a.*, acs.status as current_status FROM attendees a LEFT JOIN attendee_current_status acs ON a.id = acs.attendee_id WHERE a.meeting_id = $1',
-      [meetingId]
+  async getAttendees(meetingUuid: string): Promise<Array<Attendee & { currentStatus: string }>> {
+    const result = await this.db.query<{
+      id: string;
+      meeting_uuid: string;
+      name: string;
+      created_at: Date;
+      updated_at: Date;
+      current_status: string;
+    }>(
+      `SELECT a.*, acs.status as current_status 
+       FROM attendees a
+       LEFT JOIN attendee_current_status acs ON a.id = acs.attendee_id
+       WHERE a.meeting_uuid = $1`,
+      [meetingUuid]
     );
-    return result.rows.map(row => ({
-      ...row,
-      currentStatus: row.current_status === null ? 'engaged' : row.current_status
-    }));
+    return result.rows.map(row => DatabaseMapper.toAttendeeWithStatus(row));
   }
 
-  async getMeetingAttendees(meetingId: string): Promise<Attendee[]> {
-    const result = await this.db.query<Attendee>(
-      'SELECT * FROM attendees WHERE meeting_id = $1',
-      [meetingId]
+  async getMeetingAttendees(meetingUuid: string): Promise<Attendee[]> {
+    const result = await this.db.query<DbAttendee>(
+      'SELECT * FROM attendees WHERE meeting_uuid = $1',
+      [meetingUuid]
     );
-    return result.rows;
+    return result.rows.map(row => DatabaseMapper.toAttendee(row));
   }
 
-  async updateAttendeeStatus(attendeeId: string, meetingId: string, status: string): Promise<void> {
-    const lowerStatus = status.toLowerCase();
-
+  async updateAttendeeStatus(attendeeId: string, meetingUuid: string, status: string): Promise<void> {
     await this.db.transaction(async (client) => {
-      // Check if attendee exists in this meeting
+      // First check if attendee exists
       const attendee = await client.query(
-        'SELECT * FROM attendees WHERE id = $1 AND meeting_id = $2',
-        [attendeeId, meetingId]
+        'SELECT * FROM attendees WHERE id = $1 AND meeting_uuid = $2',
+        [attendeeId, meetingUuid]
       );
+
       if (attendee.rows.length === 0) {
-        throw new Error('Attendee not found in meeting');
+        throw new NotFoundException('Attendee not found');
       }
 
-      // Update or insert status
-      const existingStatus = await client.query(
-        'SELECT * FROM attendee_current_status WHERE attendee_id = $1 AND meeting_id = $2',
-        [attendeeId, meetingId]
+      const lowerStatus = status.toLowerCase();
+
+      // Update or insert current status
+      const currentStatus = await client.query(
+        'SELECT * FROM attendee_current_status WHERE attendee_id = $1 AND meeting_uuid = $2',
+        [attendeeId, meetingUuid]
       );
 
-      if (existingStatus.rows.length > 0) {
+      if (currentStatus.rows.length > 0) {
         await client.query(
-          'UPDATE attendee_current_status SET status = $1, updated_at = NOW() WHERE attendee_id = $2 AND meeting_id = $3',
-          [lowerStatus, attendeeId, meetingId]
+          'UPDATE attendee_current_status SET status = $1, updated_at = NOW() WHERE attendee_id = $2 AND meeting_uuid = $3',
+          [lowerStatus, attendeeId, meetingUuid]
         );
       } else {
         await client.query(
-          'INSERT INTO attendee_current_status (attendee_id, meeting_id, status) VALUES ($1, $2, $3)',
-          [attendeeId, meetingId, lowerStatus]
+          'INSERT INTO attendee_current_status (attendee_id, meeting_uuid, status, last_heartbeat, created_at, updated_at) VALUES ($1, $2, $3, NOW(), NOW(), NOW())',
+          [attendeeId, meetingUuid, lowerStatus]
         );
       }
 
       // Add status update record
       await client.query(
-        'INSERT INTO status_updates (id, attendee_id, meeting_id, status) VALUES ($1, $2, $3, $4)',
-        [uuidv4(), attendeeId, meetingId, lowerStatus]
+        'INSERT INTO status_updates (id, attendee_id, meeting_uuid, status, created_at) VALUES ($1, $2, $3, $4, NOW())',
+        [uuidv4(), attendeeId, meetingUuid, lowerStatus]
       );
     });
   }
 
-  async updateAttendeeHeartbeat(attendeeId: string, meetingId: string): Promise<void> {
+  async updateAttendeeHeartbeat(attendeeId: string, meetingUuid: string): Promise<void> {
     await this.db.query(
-      `UPDATE attendee_current_status 
-       SET last_heartbeat = NOW(), updated_at = NOW()
-       WHERE attendee_id = $1 AND meeting_id = $2`,
-      [attendeeId, meetingId]
+      'UPDATE attendee_current_status SET last_heartbeat = NOW(), updated_at = NOW() WHERE attendee_id = $1 AND meeting_uuid = $2',
+      [attendeeId, meetingUuid]
     );
   }
 
-  async addStatusUpdate(attendeeId: string, meetingId: string, status: string, context?: string): Promise<void> {
+  async addStatusUpdate(attendeeId: string, meetingUuid: string, status: string, context?: string): Promise<void> {
     await this.db.query(
-      'INSERT INTO status_updates (id, attendee_id, meeting_id, status, context) VALUES ($1, $2, $3, $4, $5)',
-      [uuidv4(), attendeeId, meetingId, status, context]
+      'INSERT INTO status_updates (id, attendee_id, meeting_uuid, status, context, created_at) VALUES ($1, $2, $3, $4, $5, NOW())',
+      [uuidv4(), attendeeId, meetingUuid, status, context]
     );
   }
 
-  async getStatusHistory(attendeeId: string, meetingId: string): Promise<StatusUpdate[]> {
-    const result = await this.db.query<StatusUpdate>(
-      'SELECT * FROM status_updates WHERE attendee_id = $1 AND meeting_id = $2 ORDER BY created_at DESC',
-      [attendeeId, meetingId]
+  async getStatusHistory(attendeeId: string, meetingUuid: string): Promise<StatusUpdate[]> {
+    const result = await this.db.query<{
+      id: string;
+      attendee_id: string;
+      meeting_uuid: string;
+      status: string;
+      context?: string;
+      created_at: Date;
+    }>(
+      'SELECT * FROM status_updates WHERE attendee_id = $1 AND meeting_uuid = $2 ORDER BY created_at DESC',
+      [attendeeId, meetingUuid]
     );
-    return result.rows;
+    return result.rows.map(row => ({
+      id: row.id,
+      attendeeId: row.attendee_id,
+      meetingUuid: row.meeting_uuid,
+      status: row.status,
+      context: row.context,
+      createdAt: row.created_at
+    }));
   }
 
-  async updateMeetingQrCode(meetingId: string, qrCode: string): Promise<void> {
-    await this.db.query(
-      'UPDATE meetings SET qr_code = $1, updated_at = NOW() WHERE meeting_id = $2',
-      [qrCode, meetingId]
-    );
-  }
+  async getMeetingStats(meetingUuid: string): Promise<MeetingStats> {
+    const [statusResult, reactionResult] = await Promise.all([
+      this.db.query<{
+        total: string;
+        engaged: string;
+        confused: string;
+        inactive: string;
+      }>(
+        `SELECT 
+          COUNT(*) as total,
+          COUNT(CASE WHEN acs.status = 'engaged' OR acs.status IS NULL THEN 1 END) as engaged,
+          COUNT(CASE WHEN acs.status = 'confused' THEN 1 END) as confused,
+          COUNT(CASE WHEN acs.status = 'inactive' THEN 1 END) as inactive
+        FROM attendees a
+        LEFT JOIN attendee_current_status acs ON a.id = acs.attendee_id
+        WHERE a.meeting_uuid = $1`,
+        [meetingUuid]
+      ),
+      this.db.query<{ type: string; count: string }>(
+        `SELECT type, COUNT(*) as count 
+         FROM reactions 
+         WHERE meeting_uuid = $1 AND expires_at > NOW() 
+         GROUP BY type`,
+        [meetingUuid]
+      )
+    ]);
 
-  async getMeetingStats(meetingId: string): Promise<MeetingStats> {
-    const result = await this.db.query(
-      `SELECT 
-        COUNT(DISTINCT a.id) as total,
-        COUNT(DISTINCT CASE WHEN LOWER(acs.status) = 'engaged' THEN a.id END) as engaged,
-        COUNT(DISTINCT CASE WHEN LOWER(acs.status) = 'confused' THEN a.id END) as confused,
-        COUNT(DISTINCT CASE WHEN LOWER(acs.status) = 'inactive' THEN a.id END) as inactive
-      FROM attendees a
-      LEFT JOIN attendee_current_status acs ON a.id = acs.attendee_id
-      WHERE a.meeting_id = $1`,
-      [meetingId]
-    );
+    const stats = statusResult.rows[0];
+    const reactionCounts: { [key: string]: number } = {
+      agree: 0,
+      disagree: 0
+    };
 
-    const stats = result.rows[0];
+    // Update counts for reactions that exist
+    reactionResult.rows.forEach(row => {
+      reactionCounts[row.type] = parseInt(row.count, 10);
+    });
+
     return {
-      total: Number(stats.total),
-      engaged: Number(stats.engaged),
-      confused: Number(stats.confused),
-      inactive: Number(stats.inactive)
+      total: parseInt(stats.total),
+      engaged: parseInt(stats.engaged),
+      confused: parseInt(stats.confused),
+      inactive: parseInt(stats.inactive),
+      agree: reactionCounts.agree,
+      disagree: reactionCounts.disagree
     };
   }
 
-  async getComments(meetingId: string): Promise<Comment[]> {
-    const result = await this.db.query<Comment>(
-      'SELECT c.*, a.name as attendee_name FROM comments c JOIN attendees a ON c.attendee_id = a.id WHERE c.meeting_id = $1 ORDER BY c.created_at DESC',
-      [meetingId]
+  async addComment(attendeeId: string, meetingUuid: string, content: string): Promise<Comment> {
+    const result = await this.db.query<DbComment>(
+      'INSERT INTO comments (id, attendee_id, meeting_uuid, content, created_at, updated_at) VALUES ($1, $2, $3, $4, NOW(), NOW()) RETURNING *',
+      [uuidv4(), attendeeId, meetingUuid, content]
     );
-    return result.rows;
+    const comment = result.rows[0];
+    return DatabaseMapper.toComment(comment);
   }
 
-  async addComment(attendeeId: string, meetingId: string, content: string): Promise<Comment> {
-    const commentId = uuidv4();
-    const result = await this.db.query<Comment>(
-      'INSERT INTO comments (id, attendee_id, meeting_id, content) VALUES ($1, $2, $3, $4) RETURNING *',
-      [commentId, attendeeId, meetingId, content]
+  async getComments(meetingUuid: string): Promise<Comment[]> {
+    const result = await this.db.query<DbComment>(
+      'SELECT * FROM comments WHERE meeting_uuid = $1 ORDER BY created_at DESC',
+      [meetingUuid]
     );
-    return result.rows[0];
+    return result.rows.map(row => DatabaseMapper.toComment(row));
+  }
+
+  async addReaction(attendeeId: string, meetingUuid: string, type: string, expiresAt: Date): Promise<void> {
+    await this.db.transaction(async (client) => {
+      // First check if attendee exists
+      const attendee = await client.query(
+        'SELECT * FROM attendees WHERE id = $1 AND meeting_uuid = $2',
+        [attendeeId, meetingUuid]
+      );
+
+      if (attendee.rows.length === 0) {
+        throw new NotFoundException('Attendee not found');
+      }
+
+      // Cancel any existing reactions of this type
+      await client.query(
+        'UPDATE reactions SET expires_at = NOW() WHERE attendee_id = $1 AND meeting_uuid = $2 AND type = $3 AND expires_at > NOW()',
+        [attendeeId, meetingUuid, type]
+      );
+
+      // Cancel opposite reactions
+      const oppositeType = type === 'agree' ? 'disagree' : 'agree';
+      await client.query(
+        'UPDATE reactions SET expires_at = NOW() WHERE attendee_id = $1 AND meeting_uuid = $2 AND type = $3 AND expires_at > NOW()',
+        [attendeeId, meetingUuid, oppositeType]
+      );
+
+      await client.query(
+        'INSERT INTO reactions (id, attendee_id, meeting_uuid, type, expires_at, created_at) VALUES ($1, $2, $3, $4, $5, NOW())',
+        [uuidv4(), attendeeId, meetingUuid, type, expiresAt]
+      );
+    });
+  }
+
+  async getActiveReactionCounts(meetingUuid: string): Promise<{ [key: string]: number }> {
+    const result = await this.db.query<{ type: string; count: string }>(
+      `SELECT type, COUNT(*) as count 
+       FROM reactions 
+       WHERE meeting_uuid = $1 AND expires_at > NOW() 
+       GROUP BY type`,
+      [meetingUuid]
+    );
+    
+    // Initialize all reaction types with 0
+    const counts: { [key: string]: number } = {
+      agree: 0,
+      disagree: 0
+    };
+
+    // Update counts for reactions that exist
+    result.rows.forEach(row => {
+      counts[row.type] = parseInt(row.count, 10);
+    });
+    return counts;
   }
 }
