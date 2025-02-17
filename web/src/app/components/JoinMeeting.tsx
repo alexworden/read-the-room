@@ -4,7 +4,7 @@ import { config } from '../config';
 
 interface JoinMeetingProps {
   meeting: Meeting;
-  onJoined: (attendee: Attendee) => void;
+  onJoined: (attendeeData: any) => void;
 }
 
 export const JoinMeeting: React.FC<JoinMeetingProps> = ({ meeting, onJoined }) => {
@@ -25,8 +25,8 @@ export const JoinMeeting: React.FC<JoinMeetingProps> = ({ meeting, onJoined }) =
       });
 
       if (response.ok) {
-        const attendee = await response.json();
-        onJoined(attendee);
+        const attendeeData = await response.json();
+        onJoined(attendeeData);
         setName('');
       }
     } catch (error) {

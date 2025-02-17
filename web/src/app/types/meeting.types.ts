@@ -19,9 +19,13 @@ export interface Meeting {
 export interface Attendee {
   id: string;
   name: string;
-  currentStatus: AttendeeStatus;
-  statusHistory: StatusUpdate[];
+  meetingId: string;
+  currentStatus?: AttendeeStatus;
+  statusHistory?: StatusUpdate[];
   lastSeen?: Date;
+  isHost?: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface StatusUpdate {

@@ -10,18 +10,27 @@ interface MeetingRoomProps {
 }
 
 export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) => {
-  const [currentStatus, setCurrentStatus] = useState<AttendeeStatus>(AttendeeStatus.ENGAGED);
+  // Add stats state
+  const [stats, setStats] = useState<{
+    total: number;
+    engaged: number;
+    confused: number;
+    idea: number;
+    disagree: number;
+  } | null>(null);
+
+  // Add transcription state
   const [transcription, setTranscription] = useState<string[]>([]);
-  const [stats, setStats] = useState<Record<string, number>>({
-    total: 0,
-    engaged: 0,
-    confused: 0,
-    idea: 0,
-    disagree: 0
-  });
+
+  // Add current status state
+  const [currentStatus, setCurrentStatus] = useState<AttendeeStatus>(
+    attendee.currentStatus || AttendeeStatus.ENGAGED
+  );
+
   const [showCopied, setShowCopied] = useState(false);
   const [isConnecting, setIsConnecting] = useState(true);
   const [retryCount, setRetryCount] = useState(0);
+  const [attendees, setAttendees] = useState<Attendee[]>([]);
   const MAX_RETRIES = 3;
   const joinUrl = `${window.location.origin}/join/${meeting.id}`;
   const socketRef = useRef<Socket | null>(null);
@@ -34,116 +43,90 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
     []
   );
 
-  const connectSocket = useCallback(() => {
-    const newSocket = io(config.apiUrl, {
-      query: { meetingId: meeting.id },
-      transports: ['websocket'],
-      autoConnect: true,
-      reconnection: true,
-      reconnectionAttempts: MAX_RETRIES,
-      reconnectionDelay: 1000,
-    });
-
-    const setupSocketListeners = (socket: Socket) => {
-      socket.on('connect', () => {
-        console.log('Socket connected, joining meeting room...');
-        socket.emit('joinMeeting', { meetingId: meeting.id, attendeeId: attendee.id });
-      });
-
-      socket.on('error', (error: { message: string }) => {
-        console.error('Socket error:', error);
-      });
-
-      socket.on('statusUpdated', (data: { attendeeId: string; status: string }) => {
-        console.log('Received status update:', data);
-        if (data.attendeeId === attendee.id) {
-          console.log('Updating current status to:', data.status);
-          setCurrentStatus(data.status as AttendeeStatus);
-        }
-      });
-
-      socket.on('stats', (newStats: Record<string, number>) => {
-        console.log('Received new stats:', newStats);
-        updateStats(newStats);
-      });
-
-      socket.on('connect_error', (err) => {
-        console.error('Socket connection error:', err);
-        setIsConnecting(true);
-        
-        if (retryCount >= MAX_RETRIES) {
-          console.error('Could not connect to server after multiple attempts');
-          setIsConnecting(false);
-        } else {
-          setRetryCount(prev => prev + 1);
-        }
-      });
-
-      socket.on('disconnect', () => {
-        console.log('Socket disconnected');
-        setIsConnecting(true);
-      });
-
-      socket.on('joinedMeeting', () => {
-        setRetryCount(0);
-      });
-
-      socket.on('transcription', (data: { text: string }) => {
-        setTranscription(prev => [...prev, data.text]);
-      });
-
-      socket.on('attendeesUpdated', () => {
-        fetchStats();
-      });
-    };
-
-    setupSocketListeners(newSocket);
-
-    newSocket.on('connect', () => {
-      console.log('Socket connected');
-      setIsConnecting(false);
-    });
-
-    socketRef.current = newSocket;
-    return newSocket;
-  }, [meeting.id, attendee.id, retryCount, updateStats]);
-
   useEffect(() => {
-    let heartbeatInterval: NodeJS.Timeout | null = null;
+    const connectSocket = async () => {
+      try {
+        const socket = io(config.apiUrl, {
+          transports: ['websocket'],
+          path: '/socket.io',
+        });
 
-    const connect = () => {
-      console.log('Connecting to Socket.IO server...');
-      
-      const socket = connectSocket();
-      
-      socket.on('connect', () => {
-        console.log('Socket.IO connected successfully');
-        
-        // Start sending heartbeats
-        heartbeatInterval = setInterval(() => {
-          socketRef.current?.emit('heartbeat', { attendeeId: attendee.id });
-        }, 15000);
-      });
+        socketRef.current = socket;
 
-      return () => {
-        if (socketRef.current) {
-          socketRef.current.disconnect();
+        socket.on('connect', () => {
+          setIsConnecting(false);
+          // Join the meeting room
+          socket.emit('joinMeeting', {
+            meetingId: meeting.id,
+            attendeeId: attendee.id
+          });
+        });
+
+        // Listen for status updates
+        socket.on('statusUpdated', ({ attendeeId, status }) => {
+          setAttendees((current) => {
+            if (!current) return current;
+            return current.map((a) => {
+              if (a.id === attendeeId) {
+                return { ...a, currentStatus: status };
+              }
+              return a;
+            });
+          });
+        });
+
+        // Listen for attendee updates
+        socket.on('attendeesUpdated', (updatedAttendees) => {
+          setAttendees(updatedAttendees.map(convertAttendeeData));
+        });
+
+        // Listen for stats updates
+        socket.on('stats', (newStats) => {
+          setStats(newStats);
+        });
+
+        // Listen for errors
+        socket.on('error', (error) => {
+          console.error('Socket error:', error);
+        });
+
+        socket.on('disconnect', () => {
+          setIsConnecting(true);
+          if (retryCount < MAX_RETRIES) {
+            setRetryCount(prev => prev + 1);
+            connectSocket();
+          }
+        });
+
+        // Fetch initial attendees list
+        const response = await fetch(`${config.apiUrl}/api/meetings/${meeting.id}/attendees`);
+        if (response.ok) {
+          const attendeesList = await response.json();
+          setAttendees(attendeesList.map(convertAttendeeData));
         }
-        if (heartbeatInterval) {
-          clearInterval(heartbeatInterval);
-          heartbeatInterval = null;
+
+      } catch (error) {
+        console.error('Failed to connect:', error);
+        if (retryCount < MAX_RETRIES) {
+          setRetryCount(prev => prev + 1);
+          connectSocket();
         }
-      };
+      }
     };
 
-    connect();
+    connectSocket();
 
+    // Cleanup on unmount
     return () => {
       if (socketRef.current) {
+        socketRef.current.emit('leaveMeeting', {
+          meetingId: meeting.id,
+          attendeeId: attendee.id
+        });
         socketRef.current.disconnect();
       }
     };
-  }, [connectSocket]);
+  }, [meeting.id, attendee.id, retryCount]);
 
   const fetchStats = async () => {
     try {
@@ -163,14 +146,12 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
       return;
     }
 
-    console.log(`Sending status update - Meeting: ${meeting.id}, Attendee: ${attendee.id}, Status: ${status}`);
     try {
       socketRef.current.emit('updateStatus', {
         meetingId: meeting.id,
         attendeeId: attendee.id,
         status
       });
-      console.log('Status update sent successfully');
     } catch (error) {
       console.error('Error sending status update:', error);
     }
@@ -184,6 +165,18 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
     } catch (err) {
       console.error('Failed to copy:', err);
     }
+  };
+
+  const convertAttendeeData = (attendee: any) => {
+    return {
+      id: attendee.id,
+      name: attendee.name,
+      meetingId: attendee.meeting_id,
+      isHost: attendee.is_host,
+      createdAt: attendee.created_at,
+      updatedAt: attendee.updated_at,
+      currentStatus: attendee.current_status || AttendeeStatus.ENGAGED
+    };
   };
 
   if (isConnecting) {
@@ -228,19 +221,19 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
           <h2 className="text-lg sm:text-xl font-semibold mb-4">Meeting Stats</h2>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="p-3 sm:p-4 bg-green-50 rounded-lg text-center">
-              <div className="text-lg sm:text-xl font-bold">{stats.engaged}</div>
+              <div className="text-lg sm:text-xl font-bold">{stats?.engaged}</div>
               <div className="text-sm sm:text-base text-gray-600">Engaged</div>
             </div>
             <div className="p-3 sm:p-4 bg-yellow-50 rounded-lg text-center">
-              <div className="text-lg sm:text-xl font-bold">{stats.confused}</div>
+              <div className="text-lg sm:text-xl font-bold">{stats?.confused}</div>
               <div className="text-sm sm:text-base text-gray-600">Confused</div>
             </div>
             <div className="p-3 sm:p-4 bg-blue-50 rounded-lg text-center">
-              <div className="text-lg sm:text-xl font-bold">{stats.idea}</div>
+              <div className="text-lg sm:text-xl font-bold">{stats?.idea}</div>
               <div className="text-sm sm:text-base text-gray-600">Ideas</div>
             </div>
             <div className="p-3 sm:p-4 bg-red-50 rounded-lg text-center">
-              <div className="text-lg sm:text-xl font-bold">{stats.disagree}</div>
+              <div className="text-lg sm:text-xl font-bold">{stats?.disagree}</div>
               <div className="text-sm sm:text-base text-gray-600">Disagree</div>
             </div>
           </div>
@@ -338,19 +331,19 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
         <h2 className="text-lg sm:text-xl font-semibold mb-4">Meeting Stats</h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <div className="p-3 sm:p-4 bg-green-50 rounded-lg text-center">
-            <div className="text-lg sm:text-xl font-bold">{stats.engaged}</div>
+            <div className="text-lg sm:text-xl font-bold">{stats?.engaged}</div>
             <div className="text-sm sm:text-base text-gray-600">Engaged</div>
           </div>
           <div className="p-3 sm:p-4 bg-yellow-50 rounded-lg text-center">
-            <div className="text-lg sm:text-xl font-bold">{stats.confused}</div>
+            <div className="text-lg sm:text-xl font-bold">{stats?.confused}</div>
             <div className="text-sm sm:text-base text-gray-600">Confused</div>
           </div>
           <div className="p-3 sm:p-4 bg-blue-50 rounded-lg text-center">
-            <div className="text-lg sm:text-xl font-bold">{stats.idea}</div>
+            <div className="text-lg sm:text-xl font-bold">{stats?.idea}</div>
             <div className="text-sm sm:text-base text-gray-600">Ideas</div>
           </div>
           <div className="p-3 sm:p-4 bg-red-50 rounded-lg text-center">
-            <div className="text-lg sm:text-xl font-bold">{stats.disagree}</div>
+            <div className="text-lg sm:text-xl font-bold">{stats?.disagree}</div>
             <div className="text-sm sm:text-base text-gray-600">Disagree</div>
           </div>
         </div>

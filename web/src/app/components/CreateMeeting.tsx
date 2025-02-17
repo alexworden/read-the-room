@@ -3,11 +3,12 @@ import { Meeting } from '../types/meeting.types';
 import { config } from '../config';
 
 interface CreateMeetingProps {
-  onMeetingCreated: (meeting: Meeting) => void;
+  onMeetingCreated: (meeting: Meeting, attendeeName: string) => void;
 }
 
 export const CreateMeeting: React.FC<CreateMeetingProps> = ({ onMeetingCreated }) => {
   const [title, setTitle] = useState('');
+  const [name, setName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -17,7 +18,7 @@ export const CreateMeeting: React.FC<CreateMeetingProps> = ({ onMeetingCreated }
     setError(null);
 
     try {
-      console.log('Sending request with title:', title);
+      // Create the meeting
       const response = await fetch(`${config.apiUrl}/api/meetings`, {
         method: 'POST',
         headers: {
@@ -26,31 +27,26 @@ export const CreateMeeting: React.FC<CreateMeetingProps> = ({ onMeetingCreated }
         body: JSON.stringify({ title }),
       });
 
-      if (response.ok) {
-        const meetingData = await response.json();
-        console.log('Meeting created successfully:', meetingData);
-
-        // Convert snake_case to camelCase for frontend use
-        const meeting: Meeting = {
-          id: meetingData.meeting_id,
-          uuid: meetingData.meeting_uuid,
-          title: meetingData.title,
-          createdAt: meetingData.created_at,
-          updatedAt: meetingData.updated_at,
-          qrCode: meetingData.qr_code
-        };
-
-        onMeetingCreated(meeting);
-        setTitle('');
-      } else {
-        const errorText = await response.text();
-        console.error('Failed to create meeting:', {
-          status: response.status,
-          statusText: response.statusText,
-          errorText,
-        });
-        setError('Failed to create meeting. Please try again.');
+      if (!response.ok) {
+        throw new Error('Failed to create meeting');
       }
+
+      const meetingData = await response.json();
+      console.log('Meeting created successfully:', meetingData);
+
+      // Convert snake_case to camelCase for frontend use
+      const meeting: Meeting = {
+        id: meetingData.meeting_id,
+        uuid: meetingData.meeting_uuid,
+        title: meetingData.title,
+        createdAt: meetingData.created_at,
+        updatedAt: meetingData.updated_at,
+        qrCode: meetingData.qr_code
+      };
+
+      onMeetingCreated(meeting, name);
+      setTitle('');
+      setName('');
     } catch (error) {
       console.error('Failed to create meeting:', error);
       setError('An error occurred. Please try again.');
@@ -64,6 +60,21 @@ export const CreateMeeting: React.FC<CreateMeetingProps> = ({ onMeetingCreated }
       <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
         <h2 className="text-xl sm:text-2xl font-semibold mb-4">Create a New Meeting</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+              Your Name
+            </label>
+            <input
+              type="text"
+              id="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="mt-1 block w-full text-sm p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter your name"
+              required
+              disabled={isLoading}
+            />
+          </div>
           <div>
             <label htmlFor="title" className="block text-sm font-medium text-gray-700">
               Meeting Title

@@ -92,12 +92,6 @@ export class MeetingRepository {
   }
 
   async updateAttendeeStatus(attendeeId: string, meetingId: string, status: string): Promise<void> {
-    // Validate UUID format
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(attendeeId)) {
-      throw new Error('Attendee not found in meeting');
-    }
-
     const lowerStatus = status.toLowerCase();
 
     await this.db.transaction(async (client) => {
