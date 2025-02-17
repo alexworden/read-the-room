@@ -3,6 +3,7 @@ import { AttendeeStatus, Meeting, Attendee } from '../types/meeting.types';
 import { io, Socket } from 'socket.io-client';
 import { debounce } from 'lodash';
 import { config } from '../config';
+import { FiCopy } from 'react-icons/fi';
 
 interface MeetingRoomProps {
   meeting: Meeting;
@@ -184,29 +185,31 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
       <div className="space-y-4">
         {/* Meeting Info and QR Code */}
         <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between sm:space-x-8">
-            <div className="flex-1 text-center mb-4 sm:mb-0">
-              <h2 className="text-xl sm:text-2xl font-semibold mb-2">{meeting.title}</h2>
-              <div className="flex flex-col space-y-2">
-                <p className="text-sm text-gray-600">Share this link with others:</p>
-                <div className="flex items-center justify-center space-x-2">
-                  <input
-                    type="text"
-                    value={joinUrl}
-                    readOnly
-                    className="flex-1 max-w-xs text-sm p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <button
-                    onClick={copyToClipboard}
-                    className="px-3 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    {showCopied ? 'Copied!' : 'Copy'}
-                  </button>
-                </div>
+          <div className="flex flex-col items-center mb-4">
+            <h2 className="text-xl sm:text-2xl font-semibold text-center">{meeting.title}</h2>
+          </div>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between">
+            <div className="flex-1 text-center sm:text-left mb-4 sm:mb-0 sm:mr-6 min-w-0">
+              <div className="flex items-center justify-center sm:justify-start space-x-2 w-full">
+                <a
+                  href={joinUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm p-2 text-blue-600 hover:text-blue-800 underline break-all"
+                >
+                  {joinUrl}
+                </a>
+                <button
+                  onClick={copyToClipboard}
+                  className="p-2 text-gray-600 hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded flex-shrink-0"
+                  title={showCopied ? 'Copied!' : 'Copy link'}
+                >
+                  <FiCopy className="w-5 h-5" />
+                </button>
               </div>
             </div>
             
-            <div className="flex-shrink-0 flex justify-center">
+            <div className="flex-shrink-0 flex items-center justify-center">
               <img
                 src={meeting.qrCode}
                 alt="QR Code"
@@ -294,29 +297,31 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
     <div className="space-y-4">
       {/* Meeting Info and QR Code */}
       <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between sm:space-x-8">
-          <div className="flex-1 text-center mb-4 sm:mb-0">
-            <h2 className="text-xl sm:text-2xl font-semibold mb-2">{meeting.title}</h2>
-            <div className="flex flex-col space-y-2">
-              <p className="text-sm text-gray-600">Share this link with others:</p>
-              <div className="flex items-center justify-center space-x-2">
-                <input
-                  type="text"
-                  value={joinUrl}
-                  readOnly
-                  className="flex-1 max-w-xs text-sm p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <button
-                  onClick={copyToClipboard}
-                  className="px-3 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {showCopied ? 'Copied!' : 'Copy'}
-                </button>
-              </div>
+        <div className="flex flex-col items-center mb-4">
+          <h2 className="text-xl sm:text-2xl font-semibold text-center">{meeting.title}</h2>
+        </div>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between">
+          <div className="flex-1 text-center sm:text-left mb-4 sm:mb-0 sm:mr-6 min-w-0">
+            <div className="flex items-center justify-center sm:justify-start space-x-2 w-full">
+              <a
+                href={joinUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm p-2 text-blue-600 hover:text-blue-800 underline break-all"
+              >
+                {joinUrl}
+              </a>
+              <button
+                onClick={copyToClipboard}
+                className="p-2 text-gray-600 hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded flex-shrink-0"
+                title={showCopied ? 'Copied!' : 'Copy link'}
+              >
+                <FiCopy className="w-5 h-5" />
+              </button>
             </div>
           </div>
           
-          <div className="flex-shrink-0 flex justify-center">
+          <div className="flex-shrink-0 flex items-center justify-center">
             <img
               src={meeting.qrCode}
               alt="QR Code"
