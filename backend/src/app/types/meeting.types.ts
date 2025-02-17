@@ -35,10 +35,19 @@ export interface StatusUpdate {
 
 export interface MeetingStats {
   total: number;
+  inactive: number;
   engaged: number;
   confused: number;
-  idea: number;
-  disagree: number;
+}
+
+export interface Comment {
+  id: string;
+  attendee_id: string;
+  meeting_id: string;
+  content: string;
+  created_at: Date;
+  updated_at: Date;
+  attendee_name?: string; // Added when joining with attendees table
 }
 
 export const AttendeeStatus = {

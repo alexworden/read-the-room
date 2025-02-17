@@ -83,4 +83,20 @@ export class MeetingController {
   async getMeetingAttendees(@Param('id') id: string) {
     return this.meetingService.getMeetingAttendees(id);
   }
+
+  @Get(':id/comments')
+  async getMeetingComments(@Param('id') id: string) {
+    return this.meetingService.getComments(id);
+  }
+
+  @Post(':id/comments')
+  async addComment(
+    @Param('id') id: string,
+    @Body() body: { attendeeId: string; content: string },
+  ) {
+    if (!body.attendeeId || !body.content) {
+      throw new BadRequestException('Attendee ID and content are required');
+    }
+    return this.meetingService.addComment(body.attendeeId, id, body.content);
+  }
 }

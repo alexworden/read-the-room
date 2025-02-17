@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Meeting, Attendee, StatusUpdate, MeetingStats } from '../types/meeting.types';
+import { Meeting, Attendee, StatusUpdate, MeetingStats, Comment } from '../types/meeting.types';
 import { DatabaseService } from '../services/database.service';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -73,13 +73,13 @@ export class MeetingRepository {
   }
 
   async getAttendees(meetingId: string): Promise<Array<Attendee & { currentStatus: string }>> {
-    const result = await this.db.query<Attendee & { current_status: string }>(
+    const result = await this.db.query<Attendee & { current_status: string | null }>(
       'SELECT a.*, acs.status as current_status FROM attendees a LEFT JOIN attendee_current_status acs ON a.id = acs.attendee_id WHERE a.meeting_id = $1',
       [meetingId]
     );
     return result.rows.map(row => ({
       ...row,
-      currentStatus: row.current_status || 'engaged'
+      currentStatus: row.current_status === null ? 'engaged' : row.current_status
     }));
   }
 
@@ -167,8 +167,7 @@ export class MeetingRepository {
         COUNT(DISTINCT a.id) as total,
         COUNT(DISTINCT CASE WHEN LOWER(acs.status) = 'engaged' THEN a.id END) as engaged,
         COUNT(DISTINCT CASE WHEN LOWER(acs.status) = 'confused' THEN a.id END) as confused,
-        COUNT(DISTINCT CASE WHEN LOWER(acs.status) = 'idea' THEN a.id END) as idea,
-        COUNT(DISTINCT CASE WHEN LOWER(acs.status) = 'disagree' THEN a.id END) as disagree
+        COUNT(DISTINCT CASE WHEN LOWER(acs.status) = 'inactive' THEN a.id END) as inactive
       FROM attendees a
       LEFT JOIN attendee_current_status acs ON a.id = acs.attendee_id
       WHERE a.meeting_id = $1`,
@@ -180,8 +179,24 @@ export class MeetingRepository {
       total: Number(stats.total),
       engaged: Number(stats.engaged),
       confused: Number(stats.confused),
-      idea: Number(stats.idea),
-      disagree: Number(stats.disagree)
+      inactive: Number(stats.inactive)
     };
+  }
+
+  async getComments(meetingId: string): Promise<Comment[]> {
+    const result = await this.db.query<Comment>(
+      'SELECT c.*, a.name as attendee_name FROM comments c JOIN attendees a ON c.attendee_id = a.id WHERE c.meeting_id = $1 ORDER BY c.created_at DESC',
+      [meetingId]
+    );
+    return result.rows;
+  }
+
+  async addComment(attendeeId: string, meetingId: string, content: string): Promise<Comment> {
+    const commentId = uuidv4();
+    const result = await this.db.query<Comment>(
+      'INSERT INTO comments (id, attendee_id, meeting_id, content) VALUES ($1, $2, $3, $4) RETURNING *',
+      [commentId, attendeeId, meetingId, content]
+    );
+    return result.rows[0];
   }
 }

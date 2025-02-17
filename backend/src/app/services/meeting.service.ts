@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { MeetingRepository } from '../repositories/meeting.repository';
-import { Meeting, Attendee, StatusUpdate, MeetingStats } from '../types/meeting.types';
+import { Meeting, Attendee, StatusUpdate, MeetingStats, Comment } from '../types/meeting.types';
 import { QRService } from './qr.service';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -77,10 +77,9 @@ export class MeetingService {
       const attendees = await this.meetingRepository.getAttendees(meetingId);
       const stats = {
         total: attendees.length,
+        inactive: attendees.filter(a => a.currentStatus === 'inactive').length,
         engaged: attendees.filter(a => a.currentStatus === 'engaged').length,
-        confused: attendees.filter(a => a.currentStatus === 'confused').length,
-        idea: attendees.filter(a => a.currentStatus === 'idea').length,
-        disagree: attendees.filter(a => a.currentStatus === 'disagree').length
+        confused: attendees.filter(a => a.currentStatus === 'confused').length
       };
       this.logger.log(`Retrieved stats for meeting ${meetingId}:`, stats);
       return stats;
@@ -92,6 +91,14 @@ export class MeetingService {
 
   async getAttendeeStatusHistory(attendeeId: string, meetingId: string): Promise<StatusUpdate[]> {
     return this.meetingRepository.getStatusHistory(attendeeId, meetingId);
+  }
+
+  async getComments(meetingId: string): Promise<Comment[]> {
+    return this.meetingRepository.getComments(meetingId);
+  }
+
+  async addComment(attendeeId: string, meetingId: string, content: string): Promise<Comment> {
+    return this.meetingRepository.addComment(attendeeId, meetingId, content);
   }
 
   private generateSection(): string {

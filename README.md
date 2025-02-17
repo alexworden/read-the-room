@@ -80,6 +80,37 @@ A real-time meeting engagement tracking application that uses AI to transcribe c
    # DB_DATABASE=readtheroom    # For production
    ```
 
+## Database Management
+
+### Initial Setup
+```bash
+# From the project root
+cd backend
+npm run db:setup
+```
+
+This script will:
+1. Drop and recreate both development (`readtheroom_dev`) and production (`readtheroom`) databases
+2. Apply the latest schema from `backend/src/app/schema.sql`
+3. Create necessary tables, indexes, and triggers
+
+### Resetting the Database
+If you need to reset the database (e.g., after schema changes):
+```bash
+cd backend
+npm run db:setup
+```
+
+This will drop all tables and recreate them with the latest schema. Note that this will delete all existing data.
+
+### Database Structure
+The application uses PostgreSQL with the following main tables:
+- `meetings`: Stores meeting information
+- `attendees`: Stores meeting participant data
+- `attendee_current_status`: Tracks current status of each attendee
+- `status_updates`: Historical record of status changes
+- `comments`: Stores meeting comments and feedback
+
 ## Project Structure
 
 ```

@@ -4,6 +4,7 @@ DROP TABLE IF EXISTS status_updates;
 DROP TABLE IF EXISTS attendee_current_status;
 DROP TABLE IF EXISTS attendees;
 DROP TABLE IF EXISTS meetings;
+DROP TABLE IF EXISTS comments;
 
 -- Create meetings table
 CREATE TABLE meetings (
@@ -45,11 +46,22 @@ CREATE TABLE status_updates (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Create comments table
+CREATE TABLE comments (
+  id UUID PRIMARY KEY,
+  attendee_id UUID REFERENCES attendees(id) ON DELETE CASCADE,
+  meeting_id TEXT REFERENCES meetings(meeting_id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Create indexes for performance
 CREATE INDEX idx_meetings_meeting_id ON meetings(meeting_id);
 CREATE INDEX idx_attendees_meeting_id ON attendees(meeting_id);
 CREATE INDEX idx_attendee_current_status_meeting_id ON attendee_current_status(meeting_id);
 CREATE INDEX idx_status_updates_meeting_id ON status_updates(meeting_id);
+CREATE INDEX idx_comments_meeting_id ON comments(meeting_id);
 
 -- Create function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -73,5 +85,10 @@ CREATE TRIGGER update_attendees_updated_at
 
 CREATE TRIGGER update_attendee_current_status_updated_at
     BEFORE UPDATE ON attendee_current_status
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_comments_updated_at
+    BEFORE UPDATE ON comments
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
