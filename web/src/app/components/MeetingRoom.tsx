@@ -145,7 +145,17 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
         });
 
         socket.on('disconnect', () => {
+          console.log('Socket disconnected');
           setIsConnecting(true);
+        });
+
+        socket.on('connect', () => {
+          console.log('Socket connected/reconnected, rejoining meeting');
+          // Rejoin the meeting when socket reconnects
+          socket.emit('joinMeeting', {
+            meetingUuid: meeting.meetingUuid,
+            attendeeId: attendee.id
+          });
         });
 
         // Set up heartbeat
@@ -366,11 +376,16 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
         <div className="flex items-center space-x-4">
           <h1 className="text-2xl sm:text-3xl font-semibold">{meeting.title}</h1>
           <button
-            onClick={() => window.open(joinUrl, '_blank')}
-            className="p-2 text-gray-600 hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-            title="Share meeting link"
+            onClick={copyToClipboard}
+            className="p-2 text-gray-600 hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded relative"
+            title="Copy meeting link"
           >
             <FiShare2 className="w-6 h-6" />
+            {showCopied && (
+              <span className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-sm px-2 py-1 rounded">
+                Copied!
+              </span>
+            )}
           </button>
         </div>
         <img

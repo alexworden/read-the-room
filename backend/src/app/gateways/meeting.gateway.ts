@@ -11,7 +11,7 @@ import { Server, Socket } from 'socket.io';
 import { MeetingStateService } from '../services/meeting-state.service';
 import { MeetingService } from '../services/meeting.service';
 import { MeetingRepository } from '../repositories/meeting.repository';
-import { Logger } from '@nestjs/common';
+import { Logger, OnModuleInit } from '@nestjs/common';
 import { config } from '../config';
 
 @WebSocketGateway({
@@ -24,7 +24,7 @@ import { config } from '../config';
     credentials: true,
   },
 })
-export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect, OnModuleInit {
   @WebSocketServer()
   server: Server;
 
@@ -36,6 +36,11 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
     private readonly meetingService: MeetingService,
     private readonly meetingRepository: MeetingRepository,
   ) {}
+
+  onModuleInit() {
+    this.logger.log('WebSocket Gateway initialized');
+    this.meetingStateService.setServer(this.server);
+  }
 
   handleConnection(client: Socket) {
     this.logger.log(`Client connected: ${client.id}`);
@@ -86,6 +91,17 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect 
     const { meetingUuid, attendeeId } = data;
     
     try {
+      // Get the meeting from repository using UUID
+      const meeting = await this.meetingRepository.getMeetingByUuid(meetingUuid);
+      if (!meeting) {
+        this.logger.error(`Meeting ${meetingUuid} not found`);
+        return;
+      }
+
+      // Always create/update meeting state when a client joins
+      this.logger.log(`Creating/updating meeting state for ${meetingUuid}`);
+      this.meetingStateService.createMeeting(meeting);
+
       // Join socket.io room using meeting_uuid
       await client.join(meetingUuid);
       this.addClientToRoom(meetingUuid, client.id);
