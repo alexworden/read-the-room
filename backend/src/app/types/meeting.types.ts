@@ -3,16 +3,16 @@ export interface Meeting {
   meetingCode: string;
   title: string;
   qrCode?: string | null;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Attendee {
   id: string;
   meetingUuid: string;
   name: string;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: string;
+  updatedAt: string;
   currentStatus?: string;
 }
 
@@ -20,9 +20,9 @@ export interface AttendeeCurrentStatus {
   attendeeId: string;
   meetingUuid: string;
   status: string;
-  lastHeartbeat: Date;
-  createdAt: Date;
-  updatedAt: Date;
+  lastHeartbeat: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface StatusUpdate {
@@ -31,7 +31,7 @@ export interface StatusUpdate {
   meetingUuid: string;
   status: string;
   context?: string;
-  createdAt: Date;
+  createdAt: string;
 }
 
 export interface MeetingStats {
@@ -48,8 +48,8 @@ export interface Comment {
   attendeeId: string;
   meetingUuid: string;
   content: string;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: string;
+  updatedAt: string;
   attendeeName?: string; // Added when joining with attendees table
 }
 

@@ -1,5 +1,5 @@
-import { Meeting, Attendee, Comment } from '../types/meeting.types';
-import { DbMeeting, DbAttendee, DbComment } from '../types/database.types';
+import { Meeting, Attendee, Comment, AttendeeCurrentStatus } from '../../types/meeting.types';
+import { DbMeeting, DbAttendee, DbComment, DbAttendeeStatus } from '../types/database.types';
 
 export class DatabaseMapper {
   static toMeeting(dbMeeting: DbMeeting): Meeting {
@@ -8,8 +8,8 @@ export class DatabaseMapper {
       meetingCode: dbMeeting.meeting_code,
       title: dbMeeting.title,
       qrCode: dbMeeting.qr_code,
-      createdAt: new Date(dbMeeting.created_at),
-      updatedAt: new Date(dbMeeting.updated_at)
+      createdAt: new Date(dbMeeting.created_at).toISOString(),
+      updatedAt: new Date(dbMeeting.updated_at).toISOString()
     };
   }
 
@@ -19,8 +19,8 @@ export class DatabaseMapper {
       meetingUuid: dbAttendee.meeting_uuid,
       name: dbAttendee.name,
       currentStatus: currentStatus as any, // Type will be enforced by the database enum
-      createdAt: new Date(dbAttendee.created_at),
-      updatedAt: new Date(dbAttendee.updated_at)
+      createdAt: new Date(dbAttendee.created_at).toISOString(),
+      updatedAt: new Date(dbAttendee.updated_at).toISOString()
     };
   }
 
@@ -30,8 +30,19 @@ export class DatabaseMapper {
       attendeeId: dbComment.attendee_id,
       meetingUuid: dbComment.meeting_uuid,
       content: dbComment.content,
-      createdAt: new Date(dbComment.created_at),
-      updatedAt: new Date(dbComment.updated_at)
+      createdAt: new Date(dbComment.created_at).toISOString(),
+      updatedAt: new Date(dbComment.updated_at).toISOString()
+    };
+  }
+
+  static toAttendeeCurrentStatus(dbStatus: DbAttendeeStatus): AttendeeCurrentStatus {
+    return {
+      attendeeId: dbStatus.attendee_id,
+      meetingUuid: dbStatus.meeting_uuid,
+      status: dbStatus.status,
+      lastHeartbeat: new Date(dbStatus.last_heartbeat).toISOString(),
+      createdAt: new Date(dbStatus.created_at).toISOString(),
+      updatedAt: new Date(dbStatus.updated_at).toISOString()
     };
   }
 

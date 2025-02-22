@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { Meeting, Attendee, StatusUpdate, MeetingStats, Comment } from '../types/meeting.types';
-import { DbMeeting, DbAttendee, DbAttendeeStatus, DbComment } from '../types/database.types';
-import { DatabaseMapper } from '../mappers/database.mapper';
+import { DbMeeting, DbAttendee, DbAttendeeStatus, DbComment } from './types/database.types';
+import { DatabaseMapper } from './mappers/database.mapper';
 import { DatabaseService } from '../services/database.service';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -31,6 +31,17 @@ export class MeetingRepository {
     const result = await this.db.query<DbMeeting>(
       'SELECT * FROM meetings WHERE meeting_code = $1',
       [meetingCode]
+    );
+    if (result.rows.length === 0) {
+      return null;
+    }
+    return DatabaseMapper.toMeeting(result.rows[0]);
+  }
+
+  async getMeetingByUuid(meetingUuid: string): Promise<Meeting | null> {
+    const result = await this.db.query<DbMeeting>(
+      'SELECT * FROM meetings WHERE meeting_uuid = $1',
+      [meetingUuid]
     );
     if (result.rows.length === 0) {
       return null;

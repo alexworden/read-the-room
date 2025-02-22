@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../services/database.service';
 import { Attendee, AttendeeCurrentStatus } from '../types/meeting.types';
+import { DbAttendee, DbAttendeeStatus } from './types/database.types';
+import { DatabaseMapper } from './mappers/database.mapper';
 import { v4 as uuidv4, validate as isUUID } from 'uuid';
 
 @Injectable()
@@ -9,11 +11,11 @@ export class AttendeeRepository {
 
   async createAttendee(name: string): Promise<Attendee> {
     const id = uuidv4();
-    const result = await this.db.query<Attendee>(
+    const result = await this.db.query<DbAttendee>(
       'INSERT INTO attendees (id, name) VALUES ($1, $2) RETURNING *',
       [id, name]
     );
-    return result.rows[0];
+    return DatabaseMapper.toAttendee(result.rows[0]);
   }
 
   async addAttendeeToMeeting(attendeeId: string, meeting_uuid: string): Promise<AttendeeCurrentStatus> {
@@ -27,7 +29,7 @@ export class AttendeeRepository {
     }
 
     const id = uuidv4();
-    const result = await this.db.query<AttendeeCurrentStatus>(
+    const result = await this.db.query<DbAttendeeStatus>(
       'INSERT INTO attendee_current_status (id, attendee_id, meeting_uuid, status, last_heartbeat) ' +
       'VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP) ' +
       'ON CONFLICT (attendee_id, meeting_uuid) DO UPDATE SET last_heartbeat = CURRENT_TIMESTAMP ' +
@@ -35,7 +37,7 @@ export class AttendeeRepository {
       [id, attendeeId, meeting_uuid, 'engaged']
     );
 
-    return result.rows[0];
+    return DatabaseMapper.toAttendeeCurrentStatus(result.rows[0]);
   }
 
   async getAttendee(id: string): Promise<Attendee | null> {
@@ -43,11 +45,11 @@ export class AttendeeRepository {
       throw new Error(`Invalid attendee ID format: ${id}`);
     }
 
-    const result = await this.db.query<Attendee>(
+    const result = await this.db.query<DbAttendee>(
       'SELECT * FROM attendees WHERE id = $1',
       [id]
     );
-    return result.rows[0] || null;
+    return result.rows[0] ? DatabaseMapper.toAttendee(result.rows[0]) : null;
   }
 
   async updateAttendeeStatus(attendeeId: string, meeting_uuid: string, status: string): Promise<void> {
@@ -87,15 +89,15 @@ export class AttendeeRepository {
       'WHERE acs.meeting_uuid = $1',
       [meeting_uuid]
     );
-    return result.rows;
+    return result.rows.map(row => ({ ...DatabaseMapper.toAttendee(row), current_status: row.current_status }));
   }
 
   async getAttendeeCurrentStatus(attendeeId: string, meeting_uuid: string): Promise<AttendeeCurrentStatus | null> {
-    const result = await this.db.query<AttendeeCurrentStatus>(
+    const result = await this.db.query<DbAttendeeStatus>(
       'SELECT * FROM attendee_current_status WHERE attendee_id = $1 AND meeting_uuid = $2',
       [attendeeId, meeting_uuid]
     );
-    return result.rows[0] || null;
+    return result.rows[0] ? DatabaseMapper.toAttendeeCurrentStatus(result.rows[0]) : null;
   }
 
   async deleteAttendee(id: string): Promise<void> {

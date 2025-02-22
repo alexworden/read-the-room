@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { Attendee, Meeting } from '../types/meeting.types';
+import React, { useState, useEffect } from 'react';
+import { Attendee, Meeting, ATTENDEE_STATUS } from '../types/meeting.types';
 import { config } from '../config';
+import { useNavigate } from 'react-router-dom';
 
 interface JoinMeetingProps {
   meeting: Meeting;
@@ -9,110 +10,98 @@ interface JoinMeetingProps {
 
 export const JoinMeeting: React.FC<JoinMeetingProps> = ({ meeting, onJoined }) => {
   const [name, setName] = useState('');
-  const [showCopied, setShowCopied] = useState(false);
-  const joinUrl = `${window.location.origin}/join/${meeting.meeting_code}`;
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    console.log('Meeting prop:', meeting);
+  }, [meeting]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
+    setLoading(true);
 
     try {
-      // First get the meeting details
-      const meetingRes = await fetch(`${config.apiUrl}/api/meetings/${meeting.meeting_code}`);
-      if (!meetingRes.ok) {
-        throw new Error('Meeting not found');
-      }
-      const meeting = await meetingRes.json();
-
-      // Then join as an attendee
-      const attendeeRes = await fetch(`${config.apiUrl}/api/meetings/${meeting.meeting_uuid}/attendees`, {
+      // Join meeting
+      const response = await fetch(`${config.apiUrl}/api/meetings/${meeting.meetingCode}/attendees`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({
+          name: name.trim(),
+        }),
       });
 
-      if (attendeeRes.ok) {
-        const attendeeData = await attendeeRes.json();
-        onJoined(attendeeData);
-        setName('');
-      } else {
-        throw new Error('Failed to join meeting');
+      if (!response.ok) {
+        throw new Error(`Failed to join meeting: ${response.statusText}`);
       }
-    } catch (error) {
-      console.error('Failed to join meeting:', error);
-    }
-  };
 
-  const copyToClipboard = async () => {
-    try {
-      await navigator.clipboard.writeText(joinUrl);
-      setShowCopied(true);
-      setTimeout(() => setShowCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy:', err);
+      const attendee: Attendee = await response.json();
+      console.log('Server response:', JSON.stringify(attendee, null, 2));
+
+      // Validate the attendee data
+      if (!attendee.id || !attendee.meetingUuid) {
+        throw new Error('Invalid response from server: missing required attendee data');
+      }
+
+      // Store attendee ID in localStorage
+      localStorage.setItem(`attendee_${meeting.meetingCode}`, attendee.id);
+
+      // Set initial status
+      attendee.currentStatus = ATTENDEE_STATUS.ENGAGED;
+
+      // Navigate to meeting room with required state
+      navigate(`/room/${meeting.meetingCode}`, {
+        state: {
+          meeting,
+          attendee
+        }
+      });
+    } catch (error) {
+      console.error('Error joining meeting:', error);
+      setError(error instanceof Error ? error.message : 'Failed to join meeting');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="space-y-4">
-      <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between sm:space-x-8">
-          <div className="flex-1 text-center mb-4 sm:mb-0">
-            <h2 className="text-xl sm:text-2xl font-semibold mb-2">{meeting.title}</h2>
-            <div className="flex flex-col space-y-2">
-              <p className="text-sm text-gray-600">Share this link with others:</p>
-              <div className="flex items-center justify-center space-x-2">
-                <input
-                  type="text"
-                  value={joinUrl}
-                  readOnly
-                  className="flex-1 max-w-xs text-sm p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <button
-                  onClick={copyToClipboard}
-                  className="px-3 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {showCopied ? 'Copied!' : 'Copy'}
-                </button>
-              </div>
-            </div>
-          </div>
-          
-          <div className="flex-shrink-0 flex justify-center">
-            <img
-              src={meeting.qrCode}
-              alt="QR Code"
-              className="w-32 h-32 sm:w-40 sm:h-40"
-            />
-          </div>
+    <div className="flex flex-col items-center justify-center p-6 bg-white rounded-lg shadow-lg max-w-md mx-auto">
+      <h2 className="text-2xl font-bold mb-6">{meeting.title}</h2>
+      
+      <form onSubmit={handleSubmit} className="w-full">
+        <div className="mb-4">
+          <label htmlFor="name" className="block text-gray-700 text-sm font-bold mb-2">
+            Your Name
+          </label>
+          <input
+            type="text"
+            id="name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+            placeholder="Enter your name"
+          />
         </div>
 
-        <div className="mt-6">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                Your Name
-              </label>
-              <input
-                type="text"
-                id="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="mt-1 block w-full text-sm p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Enter your name"
-                required
-              />
-            </div>
-            <button
-              type="submit"
-              className="w-full px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              Join Meeting
-            </button>
-          </form>
-        </div>
-      </div>
+        {error && (
+          <div className="mb-4 text-red-500 text-sm">
+            {error}
+          </div>
+        )}
+
+        <button
+          type="submit"
+          className="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+          disabled={loading}
+        >
+          {loading ? 'Joining...' : 'Join Meeting'}
+        </button>
+      </form>
     </div>
   );
 };
