@@ -33,23 +33,16 @@ async function bootstrap() {
   Logger.log(`Frontend URL: ${config.webUrl}`);
   Logger.log(`API Host: ${process.env.RTR_API_HOST || 'localhost'}`);
 
-  // Configure CORS - more permissive in development
-  const corsOptions = process.env.NODE_ENV === 'production' 
-    ? {
-        origin: config.webUrl,
-        methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-        preflightContinue: false,
-        optionsSuccessStatus: 204,
-        credentials: true,
-        allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
-      }
-    : {
-        origin: true, // Allow all origins in development
-        credentials: true,
-      };
-
-  app.enableCors(corsOptions);
-  Logger.log(`CORS configured with origin: ${process.env.NODE_ENV === 'production' ? config.webUrl : 'all origins (development)'}`);
+  // Temporarily more permissive CORS configuration for debugging
+  app.enableCors({
+    origin: true, // Allow all origins temporarily
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
+    credentials: true,
+    maxAge: 3600,
+  });
+  
+  Logger.log(`CORS configured with permissive settings for debugging`);
   
   app.setGlobalPrefix('api');
 
