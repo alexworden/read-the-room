@@ -11,11 +11,7 @@ export class TestDatabaseService extends DatabaseService {
   constructor() {
     super();
     this.testPool = new Pool({
-      host: process.env.DB_HOST || 'localhost',
-      port: parseInt(process.env.DB_PORT || '5432'),
-      user: process.env.DB_USERNAME || 'postgres',
-      password: process.env.DB_PASSWORD || 'postgres',
-      database: 'readtheroom_dev',
+      connectionString: process.env.RTR_DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/readtheroom_test'
     });
   }
 
