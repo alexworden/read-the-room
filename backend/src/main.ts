@@ -15,19 +15,23 @@ declare const module: any;
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  app.setGlobalPrefix('api');
 
-  // Configure CORS
+  // Configure CORS - must come before setGlobalPrefix
   const origins = [
     config.webUrl,
     'http://localhost:19000', // Keep this for Expo development
   ];
   app.enableCors({
     origin: origins,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
+    exposedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
+    preflightContinue: false,
+    optionsSuccessStatus: 204
   });
+
+  app.setGlobalPrefix('api');
 
   // Enable JSON body parsing
   app.use(json());
