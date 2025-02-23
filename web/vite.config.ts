@@ -1,19 +1,29 @@
 /// <reference types='vitest' />
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
+import path from 'path';
 
 export default defineConfig({
   root: __dirname,
   cacheDir: '../node_modules/.vite/web',
+  plugins: [
+    react(),
+  ],
+  resolve: {
+    alias: {
+      '@app': path.resolve(__dirname, './src/app')
+    }
+  },
   server: {
+    host: process.env.RTR_WEB_HOST || '0.0.0.0',
     port: parseInt(process.env.RTR_WEB_PORT || '4200'),
-    host: '0.0.0.0',
     proxy: {
       '/api': {
         target: `${process.env.RTR_API_PROTOCOL || 'http'}://${process.env.RTR_API_HOST || 'localhost'}:${process.env.RTR_API_PORT || '3000'}`,
         changeOrigin: true,
         secure: false,
+        ws: true,
+        rewrite: (path) => path.replace(/^\/api/, '')
       },
       '/socket.io': {
         target: `${process.env.RTR_API_PROTOCOL || 'http'}://${process.env.RTR_API_HOST || 'localhost'}:${process.env.RTR_API_PORT || '3000'}`,
@@ -30,13 +40,9 @@ export default defineConfig({
     cors: true,
     strictPort: true,
   },
-  plugins: [
-    react(),
-    nxViteTsPaths(),
-  ],
   build: {
     target: 'es2015',
-    outDir: '../dist/web',
+    outDir: 'dist',
     reportCompressedSize: true,
     commonjsOptions: { transformMixedEsModules: true },
   },

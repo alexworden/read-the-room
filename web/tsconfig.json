@@ -5,7 +5,19 @@
     "esModuleInterop": false,
     "allowSyntheticDefaultImports": true,
     "strict": true,
-    "types": ["vite/client"]
+    "rootDir": ".",
+    "sourceMap": true,
+    "declaration": false,
+    "moduleResolution": "node",
+    "target": "es2015",
+    "module": "esnext",
+    "lib": ["es2020", "dom"],
+    "skipLibCheck": true,
+    "types": ["vite/client"],
+    "baseUrl": ".",
+    "paths": {
+      "@app/*": ["src/app/*"]
+    }
   },
   "files": [],
   "include": [],
@@ -16,6 +28,5 @@
     {
       "path": "./tsconfig.spec.json"
     }
-  ],
-  "extends": "../tsconfig.base.json"
+  ]
 }
