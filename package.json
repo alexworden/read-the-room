@@ -2,7 +2,10 @@
   "name": "@readtheroom/source",
   "version": "0.0.0",
   "license": "MIT",
-  "scripts": {},
+  "scripts": {
+    "build:web": "npx nx build web",
+    "start:web": "npx nx preview web --prod"
+  },
   "private": true,
   "dependencies": {
     "@nestjs/common": "^10.0.2",

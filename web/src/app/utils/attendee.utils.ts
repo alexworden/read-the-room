@@ -1,4 +1,4 @@
-import { Attendee, ATTENDEE_STATUS } from '../types/meeting.types';
+import { Attendee, ATTENDEE_STATUS, AttendeeStatus } from '../types/meeting.types';
 
 interface AttendeeData {
   id: string;
@@ -7,7 +7,7 @@ interface AttendeeData {
   isHost?: boolean;
   createdAt: string;
   updatedAt: string;
-  currentStatus?: string;
+  currentStatus?: AttendeeStatus;
 }
 
 export const convertAttendeeData = (attendeeData: AttendeeData): Attendee => {
