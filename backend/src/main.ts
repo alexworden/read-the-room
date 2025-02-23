@@ -16,8 +16,9 @@ declare const module: any;
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  Logger.log('=== DEBUG START ===');
   // Debug environment variables
-  Logger.log('Environment variables:', {
+  Logger.log('Environment variables:', JSON.stringify({
     NODE_ENV: process.env.NODE_ENV,
     PORT: process.env.PORT,
     RTR_API_HOST: process.env.RTR_API_HOST,
@@ -25,7 +26,8 @@ async function bootstrap() {
     RTR_API_PROTOCOL: process.env.RTR_API_PROTOCOL,
     RTR_WEB_HOST: process.env.RTR_WEB_HOST,
     RTR_WEB_PROTOCOL: process.env.RTR_WEB_PROTOCOL,
-  });
+  }, null, 2));
+  Logger.log('=== DEBUG END ===');
 
   Logger.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
   Logger.log(`Frontend URL: ${config.webUrl}`);
