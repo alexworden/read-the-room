@@ -17,7 +17,14 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   // Configure CORS
-  app.enableCors();
+  app.enableCors({
+    origin: process.env.NODE_ENV === 'production' 
+      ? 'https://read-the-room.up.railway.app'
+      : true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+  });
   
   app.setGlobalPrefix('api');
 
