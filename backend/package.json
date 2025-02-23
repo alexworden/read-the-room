@@ -4,9 +4,10 @@
   "description": "Backend for ReadTheRoom application",
   "main": "src/main.ts",
   "scripts": {
-    "start": "nest start",
-    "start:dev": "nest start --watch",
     "build": "nest build",
+    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "start": "node dist/main",
+    "start:dev": "nest start --watch",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
