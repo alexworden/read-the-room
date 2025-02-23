@@ -4,8 +4,8 @@
   "license": "MIT",
   "scripts": {
     "dev": "vite --host $RTR_WEB_HOST --port $RTR_WEB_PORT",
-    "prebuild": "node -e \"process.platform === 'linux' && process.exit(1)\" || npm install",
-    "build": "npm install && vite build",
+    "prebuild": "node -e \"process.platform === 'linux' && npm install @rollup/rollup-linux-x64-gnu\"",
+    "build": "vite build",
     "start": "serve dist --single --listen $PORT --cors",
     "preview": "vite preview"
   },
