@@ -18,7 +18,7 @@ async function bootstrap() {
 
   // Configure CORS - must come before setGlobalPrefix
   const origins = [
-    config.webUrl,
+    'https://read-the-room.up.railway.app',
     'http://localhost:19000', // Keep this for Expo development
   ];
   app.enableCors({
