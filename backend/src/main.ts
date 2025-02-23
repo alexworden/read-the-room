@@ -18,6 +18,7 @@ async function bootstrap() {
 
   Logger.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
   Logger.log(`Frontend URL: ${config.webUrl}`);
+  Logger.log(`API Host: ${process.env.RTR_API_HOST || 'localhost'}`);
 
   // Configure CORS
   app.enableCors({
@@ -38,12 +39,21 @@ async function bootstrap() {
 
   // In production, bind to all network interfaces
   const host = process.env.NODE_ENV === 'production' ? '0.0.0.0' : config.apiHost;
-  const port = config.apiPort;
+  // Use Railway's PORT in production, fallback to config.apiPort
+  const port = process.env.NODE_ENV === 'production' 
+    ? parseInt(process.env.PORT || '80', 10)
+    : config.apiPort;
+  
   Logger.log(`Binding to ${host}:${port}`);
   await app.listen(port, host);
   
-  const url = process.env.NODE_ENV === 'production'
-    ? `https://${process.env.RTR_API_HOST}`
+  // In production, use Railway's domain
+  const apiHost = process.env.RTR_API_HOST;
+  if (process.env.NODE_ENV === 'production' && !apiHost) {
+    Logger.warn('RTR_API_HOST is not set in production!');
+  }
+  const url = process.env.NODE_ENV === 'production' && apiHost
+    ? `https://${apiHost}`
     : config.apiUrl;
   Logger.log(`🚀 Application is running on: ${url}/api`);
 
