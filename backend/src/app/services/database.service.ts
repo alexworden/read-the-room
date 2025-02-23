@@ -7,7 +7,7 @@ export class DatabaseService {
 
   constructor() {
     this.pool = new Pool({
-      connectionString: process.env.RTR_DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/readtheroom_dev'
+      connectionString: process.env.RTR_DATABASE_URL || process.env.DATABASE_URL
     });
   }
 

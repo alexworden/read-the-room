@@ -54,15 +54,13 @@ async function bootstrap() {
 
   // In production, bind to all network interfaces
   const host = process.env.NODE_ENV === 'production' ? '0.0.0.0' : config.apiHost;
-  const port = process.env.NODE_ENV === 'production'
-    ? parseInt(process.env.PORT, 10)
-    : config.apiPort;
+  const port = process.env.PORT ? parseInt(process.env.PORT, 10) : config.apiPort;
 
   if (!port) {
-    throw new Error('Port is not configured! Set PORT in production or RTR_API_PORT in development.');
+    throw new Error('Port is not configured! Set PORT environment variable or RTR_API_PORT in development.');
   }
 
-  Logger.log(`PORT env var: ${process.env.PORT}`);
+  Logger.log(`Using port: ${port}`);
   Logger.log(`Binding to ${host}:${port}`);
   await app.listen(port, host);
   
