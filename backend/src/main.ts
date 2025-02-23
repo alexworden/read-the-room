@@ -16,6 +16,17 @@ declare const module: any;
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  // Debug environment variables
+  Logger.log('Environment variables:', {
+    NODE_ENV: process.env.NODE_ENV,
+    PORT: process.env.PORT,
+    RTR_API_HOST: process.env.RTR_API_HOST,
+    RTR_API_PORT: process.env.RTR_API_PORT,
+    RTR_API_PROTOCOL: process.env.RTR_API_PROTOCOL,
+    RTR_WEB_HOST: process.env.RTR_WEB_HOST,
+    RTR_WEB_PROTOCOL: process.env.RTR_WEB_PROTOCOL,
+  });
+
   Logger.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
   Logger.log(`Frontend URL: ${config.webUrl}`);
   Logger.log(`API Host: ${process.env.RTR_API_HOST || 'localhost'}`);
@@ -39,11 +50,8 @@ async function bootstrap() {
 
   // In production, bind to all network interfaces
   const host = process.env.NODE_ENV === 'production' ? '0.0.0.0' : config.apiHost;
-  // Use Railway's PORT in production, fallback to config.apiPort
-  const port = process.env.NODE_ENV === 'production' 
-    ? parseInt(process.env.PORT || '80', 10)
-    : config.apiPort;
-  
+  const port = parseInt(process.env.PORT || '80', 10);
+  Logger.log(`PORT env var: ${process.env.PORT}`);
   Logger.log(`Binding to ${host}:${port}`);
   await app.listen(port, host);
   
