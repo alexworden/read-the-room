@@ -26,7 +26,9 @@
       "defaultConfiguration": "development",
       "options": {
         "buildTarget": "web:build",
-        "hmr": true
+        "hmr": true,
+        "host": "${RTR_WEB_HOST}",
+        "port": "${RTR_WEB_PORT}"
       },
       "configurations": {
         "development": {
@@ -37,6 +39,15 @@
           "buildTarget": "web:build:production",
           "hmr": false
         }
+      }
+    },
+    "preview": {
+      "executor": "@nx/vite:preview-server",
+      "defaultConfiguration": "development",
+      "options": {
+        "buildTarget": "web:build",
+        "host": "${RTR_WEB_HOST}",
+        "port": "${RTR_WEB_PORT}"
       }
     }
   }

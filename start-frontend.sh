@@ -18,5 +18,8 @@ echo "- API Host: $RTR_API_HOST"
 echo "- API Port: $RTR_API_PORT"
 echo "- API URL: $RTR_API_PROTOCOL://$RTR_API_HOST:$RTR_API_PORT"
 
-# Start the frontend using nx
-npx nx serve web --host=$RTR_WEB_HOST --port=$RTR_WEB_PORT
+# Change to web directory
+cd web
+
+# Start the frontend using nx serve with explicit host and port
+npx nx serve web --configuration=development --host=$RTR_WEB_HOST --port=$RTR_WEB_PORT

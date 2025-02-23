@@ -3,6 +3,7 @@ import { Meeting, Attendee, Comment, ATTENDEE_STATUS, REACTION_TYPE } from '../t
 import { io, Socket } from 'socket.io-client';
 import { debounce } from 'lodash';
 import { config } from '../config';
+import { IconType } from 'react-icons';
 import { FiCopy, FiMessageCircle, FiShare2 } from 'react-icons/fi';
 import { Bar } from 'react-chartjs-2';
 import {
@@ -13,6 +14,8 @@ import {
   Title,
   Tooltip,
   Legend,
+  ChartOptions,
+  TooltipCallbacks,
   TooltipItem,
 } from 'chart.js';
 
@@ -341,7 +344,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
     ]
   };
 
-  const chartOptions = {
+  const chartOptions: ChartOptions<'bar'> = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
@@ -350,7 +353,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
       },
       tooltip: {
         callbacks: {
-          label: function(tooltipItem: TooltipItem<"bar">) {
+          label: function(tooltipItem: TooltipItem<'bar'>) {
             const value = tooltipItem.raw as number;
             const total = stats?.total || 1;
             const percentage = ((value / total) * 100).toFixed(1);
@@ -378,10 +381,10 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
           <h1 className="text-2xl sm:text-3xl font-semibold">{meeting.title}</h1>
           <button
             onClick={copyToClipboard}
-            className="p-2 text-gray-600 hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded relative"
+            className="relative p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
             title="Copy meeting link"
           >
-            <FiShare2 className="w-6 h-6" />
+            {FiShare2({ size: 24 })}
             {showCopied && (
               <span className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-sm px-2 py-1 rounded">
                 Copied!
@@ -516,7 +519,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
             disabled={!newComment.trim()}
             className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <FiMessageCircle className="w-5 h-5" />
+            {FiMessageCircle({ size: 20 })}
           </button>
         </div>
       </div>

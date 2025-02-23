@@ -1,0 +1,270 @@
+{
+  "version": "6.0",
+  "nxVersion": "19.8.4",
+  "deps": {
+    "axios": "^1.6.0",
+    "chart.js": "^4.4.7",
+    "lodash": "^4.17.21",
+    "react": "18.2.0",
+    "react-chartjs-2": "^5.3.0",
+    "react-dom": "18.2.0",
+    "react-icons": "^5.4.0",
+    "react-router-dom": "^6.29.0",
+    "socket.io-client": "^4.8.1",
+    "@nx/vite": "19.8.4",
+    "@nx/react": "19.8.4",
+    "@nx/workspace": "19.8.4",
+    "@types/lodash": "^4.14.202",
+    "@types/react": "18.2.0",
+    "@types/react-dom": "18.2.0",
+    "@vitejs/plugin-react": "^4.2.0",
+    "autoprefixer": "^10.4.13",
+    "nx": "19.8.4",
+    "postcss": "^8.4.21",
+    "tailwindcss": "^3.2.4",
+    "typescript": "~5.4.2",
+    "vite": "^5.0.0",
+    "vite-tsconfig-paths": "^4.2.1"
+  },
+  "pathMappings": {},
+  "nxJsonPlugins": [],
+  "pluginsConfig": {
+    "@nx/js": {
+      "analyzeSourceFiles": false
+    }
+  },
+  "fileMap": {
+    "nonProjectFiles": [],
+    "projectFileMap": {
+      "web": [
+        {
+          "file": ".nx/cache/13493355372937549986.commit",
+          "hash": "4664556114322093609"
+        },
+        {
+          "file": ".nx/cache/13493355372937549986/code",
+          "hash": "1838281907459330133"
+        },
+        {
+          "file": ".nx/cache/13493355372937549986/outputs/dist/web/assets/index-DYmUn-Za.css",
+          "hash": "5181571827816781701"
+        },
+        {
+          "file": ".nx/cache/13493355372937549986/outputs/dist/web/assets/index-eysJ6nva.js",
+          "hash": "3444472252794279630"
+        },
+        {
+          "file": ".nx/cache/13493355372937549986/outputs/dist/web/favicon.ico",
+          "hash": "9303420814833116677"
+        },
+        {
+          "file": ".nx/cache/13493355372937549986/outputs/dist/web/index.html",
+          "hash": "15982311237323587522"
+        },
+        {
+          "file": ".nx/cache/13493355372937549986/outputs/dist/web/package.json",
+          "hash": "198762574257300978"
+        },
+        {
+          "file": ".nx/cache/13493355372937549986/source",
+          "hash": "17813772490952380900"
+        },
+        {
+          "file": ".nx/cache/13493355372937549986/terminalOutput",
+          "hash": "5156559942260346403"
+        },
+        {
+          "file": ".nx/cache/run.json",
+          "hash": "7727089401053314129"
+        },
+        {
+          "file": ".nx/cache/terminalOutputs/13493355372937549986",
+          "hash": "5156559942260346403"
+        },
+        {
+          "file": ".nx/workspace-data/B07B02C3-1CA1-58A6-85B9-A7B3EC32D8CF.db-shm",
+          "hash": "10692559056910160912"
+        },
+        {
+          "file": ".nx/workspace-data/B07B02C3-1CA1-58A6-85B9-A7B3EC32D8CF.db-wal",
+          "hash": "5910957851069469766"
+        },
+        {
+          "file": ".nx/workspace-data/d/server-process.json",
+          "hash": "9187967444849789866"
+        },
+        {
+          "file": ".nx/workspace-data/file-map.json",
+          "hash": "11366473788031194226"
+        },
+        {
+          "file": ".nx/workspace-data/lockfile.hash",
+          "hash": "8472961650869388545"
+        },
+        {
+          "file": ".nx/workspace-data/nx_files.nxt",
+          "hash": "2331167094845021873"
+        },
+        {
+          "file": ".nx/workspace-data/parsed-lock-file.json",
+          "hash": "1248985258224552737"
+        },
+        {
+          "file": ".nx/workspace-data/project-graph.json",
+          "hash": "13672105951419133026"
+        },
+        {
+          "file": "dist/web/assets/index-DYmUn-Za.css",
+          "hash": "5181571827816781701"
+        },
+        {
+          "file": "dist/web/assets/index-eysJ6nva.js",
+          "hash": "3444472252794279630"
+        },
+        {
+          "file": "dist/web/favicon.ico",
+          "hash": "9303420814833116677"
+        },
+        {
+          "file": "dist/web/index.html",
+          "hash": "15982311237323587522"
+        },
+        {
+          "file": "dist/web/package.json",
+          "hash": "198762574257300978"
+        },
+        {
+          "file": "eslint.config.js",
+          "hash": "6898695751728726704"
+        },
+        {
+          "file": "index.html",
+          "hash": "13413820599096115620"
+        },
+        {
+          "file": "jest.config.ts",
+          "hash": "16481880068010347016"
+        },
+        {
+          "file": "nx.json",
+          "hash": "2476224655994321638"
+        },
+        {
+          "file": "package-lock.json",
+          "hash": "1609296929776812866"
+        },
+        {
+          "file": "package.json",
+          "hash": "198762574257300978",
+          "deps": [
+            "npm:@nx/vite",
+            "npm:@nx/react",
+            "npm:@nx/workspace",
+            "npm:@types/lodash",
+            "npm:@types/react",
+            "npm:@types/react-dom",
+            "npm:@vitejs/plugin-react",
+            "npm:nx",
+            "npm:postcss",
+            "npm:typescript",
+            "npm:vite",
+            "npm:vite-tsconfig-paths",
+            "npm:axios",
+            "npm:chart.js",
+            "npm:lodash",
+            "npm:react",
+            "npm:react-chartjs-2",
+            "npm:react-dom",
+            "npm:react-icons",
+            "npm:react-router-dom",
+            "npm:socket.io-client"
+          ]
+        },
+        {
+          "file": "postcss.config.js",
+          "hash": "2759402739052110475"
+        },
+        {
+          "file": "project.json",
+          "hash": "6815697200532816283"
+        },
+        {
+          "file": "public/favicon.ico",
+          "hash": "9303420814833116677"
+        },
+        {
+          "file": "src/app/app.spec.tsx",
+          "hash": "12109395395346477033"
+        },
+        {
+          "file": "src/app/app.tsx",
+          "hash": "18261209193805146051"
+        },
+        {
+          "file": "src/app/components/CreateMeeting.tsx",
+          "hash": "14840858735675631385"
+        },
+        {
+          "file": "src/app/components/JoinMeeting.tsx",
+          "hash": "4429565064193424931"
+        },
+        {
+          "file": "src/app/components/MeetingRoom.tsx",
+          "hash": "8850342300722174485"
+        },
+        {
+          "file": "src/app/config.ts",
+          "hash": "12111990105737606450"
+        },
+        {
+          "file": "src/app/nx-welcome.tsx",
+          "hash": "14708174282304233720"
+        },
+        {
+          "file": "src/app/services/audio.service.ts",
+          "hash": "13617804431390364801"
+        },
+        {
+          "file": "src/app/types/meeting.types.ts",
+          "hash": "1765910088887147146"
+        },
+        {
+          "file": "src/app/utils/attendee.utils.ts",
+          "hash": "10701377816710170459"
+        },
+        {
+          "file": "src/assets/.gitkeep",
+          "hash": "3244421341483603138"
+        },
+        {
+          "file": "src/main.tsx",
+          "hash": "848290857138961582"
+        },
+        {
+          "file": "src/styles.css",
+          "hash": "9540575453073076294"
+        },
+        {
+          "file": "tailwind.config.js",
+          "hash": "13090734457927965885"
+        },
+        {
+          "file": "tsconfig.app.json",
+          "hash": "17534131638295275382"
+        },
+        {
+          "file": "tsconfig.json",
+          "hash": "548923470133819599"
+        },
+        {
+          "file": "tsconfig.spec.json",
+          "hash": "6810478594055726884"
+        },
+        {
+          "file": "vite.config.ts",
+          "hash": "16057335591592173538"
+        }
+      ]
+    }
+  }
+}

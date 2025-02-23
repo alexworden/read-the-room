@@ -8,7 +8,7 @@ export default defineConfig({
   cacheDir: '../node_modules/.vite/web',
   server: {
     port: parseInt(process.env.RTR_WEB_PORT || '4200'),
-    host: process.env.RTR_WEB_HOST || 'localhost',
+    host: '0.0.0.0',
     proxy: {
       '/api': {
         target: `${process.env.RTR_API_PROTOCOL || 'http'}://${process.env.RTR_API_HOST || 'localhost'}:${process.env.RTR_API_PORT || '3000'}`,
@@ -21,16 +21,21 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
+    cors: true,
+    strictPort: true,
   },
   preview: {
     port: parseInt(process.env.RTR_WEB_PORT || '4200'),
-    host: process.env.RTR_WEB_HOST || 'localhost',
+    host: '0.0.0.0',
+    cors: true,
+    strictPort: true,
   },
   plugins: [
     react(),
     nxViteTsPaths(),
   ],
   build: {
+    target: 'es2015',
     outDir: '../dist/web',
     reportCompressedSize: true,
     commonjsOptions: { transformMixedEsModules: true },
