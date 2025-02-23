@@ -16,21 +16,9 @@ declare const module: any;
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Configure CORS - must come before setGlobalPrefix
-  const origins = [
-    'https://read-the-room.up.railway.app',
-    'http://localhost:19000', // Keep this for Expo development
-  ];
-  app.enableCors({
-    origin: origins,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
-    exposedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true,
-    preflightContinue: false,
-    optionsSuccessStatus: 204
-  });
-
+  // Configure CORS
+  app.enableCors();
+  
   app.setGlobalPrefix('api');
 
   // Enable JSON body parsing
@@ -43,9 +31,6 @@ async function bootstrap() {
   
   const url = config.apiUrl;
   Logger.log(`🚀 Application is running on: ${url}/api`);
-  Logger.log(`🌐 Allowed origins: ${origins.join(', ')}`);
-  Logger.log(`📝 Environment: NODE_ENV=${process.env.NODE_ENV}`);
-  Logger.log(`🔒 Web URL Config: RTR_WEB_HOST=${process.env.RTR_WEB_HOST}`);
 
   if (module.hot) {
     module.hot.accept();
