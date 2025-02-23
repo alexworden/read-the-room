@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Put, Body, Param, NotFoundException, BadRequestException } from '@nestjs/common';
 import { MeetingService } from '../services/meeting.service';
 import { Meeting, Attendee, MeetingStats } from '../types/meeting.types';
+import { Logger } from '@nestjs/common';
 
 @Controller('meetings')
 export class MeetingController {
@@ -10,10 +11,15 @@ export class MeetingController {
 
   @Post()
   async createMeeting(@Body() body: { title: string }): Promise<Meeting> {
-    if (!body.title) {
-      throw new BadRequestException('Title is required');
+    try {
+      if (!body.title) {
+        throw new BadRequestException('Title is required');
+      }
+      return await this.meetingService.createMeeting(body.title);
+    } catch (error) {
+      Logger.error('Failed to create meeting:', error);
+      throw error;
     }
-    return this.meetingService.createMeeting(body.title);
   }
 
   @Get(':code')

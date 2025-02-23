@@ -1,14 +1,26 @@
 import { Injectable } from '@nestjs/common';
 import { Pool, PoolClient, QueryResult } from 'pg';
+import { Logger } from '@nestjs/common';
 
 @Injectable()
 export class DatabaseService {
   private pool: Pool;
+  private readonly logger = new Logger(DatabaseService.name);
 
   constructor() {
-    this.pool = new Pool({
-      connectionString: process.env.RTR_DATABASE_URL || process.env.DATABASE_URL
-    });
+    try {
+      const connectionString = process.env.RTR_DATABASE_URL || process.env.DATABASE_URL;
+      if (!connectionString) {
+        throw new Error('Database connection string not configured! Set RTR_DATABASE_URL or DATABASE_URL environment variable.');
+      }
+      
+      this.logger.log(`Connecting to database with connection string starting with: ${connectionString.substring(0, connectionString.indexOf('://')+3)}...`);
+      
+      this.pool = new Pool({ connectionString });
+    } catch (error) {
+      this.logger.error('Failed to initialize database connection:', error);
+      throw error;
+    }
   }
 
   protected getPool(): Pool {
@@ -16,7 +28,12 @@ export class DatabaseService {
   }
 
   async query<T>(text: string, params?: any[]): Promise<QueryResult<T>> {
-    return this.getPool().query(text, params);
+    try {
+      return await this.getPool().query(text, params);
+    } catch (error) {
+      this.logger.error(`Failed to execute query: ${text}`, error);
+      throw error;
+    }
   }
 
   async end(): Promise<void> {

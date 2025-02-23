@@ -34,10 +34,15 @@ export class MeetingService {
   }
 
   async createMeeting(title: string): Promise<Meeting> {
-    const meetingUuid = uuidv4();
-    const meetingCode = this.generateMeetingCode();
-    const qrCode = await this.qrService.generateQRCode(meetingCode);
-    return this.meetingRepository.createMeeting(title, meetingUuid, meetingCode, qrCode);
+    try {
+      const meetingUuid = uuidv4();
+      const meetingCode = this.generateMeetingCode();
+      const qrCode = await this.qrService.generateQRCode(meetingCode);
+      return await this.meetingRepository.createMeeting(title, meetingUuid, meetingCode, qrCode);
+    } catch (error) {
+      this.logger.error('Failed to create meeting in service:', error);
+      throw error;
+    }
   }
 
   async getMeeting(meetingCode: string): Promise<Meeting | null> {

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, Logger } from '@nestjs/common';
 import { Meeting, Attendee, StatusUpdate, MeetingStats, Comment } from '../types/meeting.types';
 import { DbMeeting, DbAttendee, DbAttendeeStatus, DbComment } from './types/database.types';
 import { DatabaseMapper } from './mappers/database.mapper';
@@ -7,24 +7,31 @@ import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class MeetingRepository {
+  private readonly logger = new Logger(MeetingRepository.name);
+
   constructor(private db: DatabaseService) {}
 
   async createMeeting(title: string, meetingUuid: string, meetingCode: string, qrCode: string): Promise<Meeting> {
-    // Check if meeting code already exists
-    const existingMeeting = await this.db.query<{ meeting_code: string }>(
-      'SELECT meeting_code FROM meetings WHERE meeting_code = $1',
-      [meetingCode]
-    );
-    if (existingMeeting.rows.length > 0) {
-      throw new ConflictException('Meeting code already exists');
+    try {
+      // Check if meeting code already exists
+      const existingMeeting = await this.db.query<{ meeting_code: string }>(
+        'SELECT meeting_code FROM meetings WHERE meeting_code = $1',
+        [meetingCode]
+      );
+      if (existingMeeting.rows.length > 0) {
+        throw new ConflictException('Meeting code already exists');
+      }
+
+      const result = await this.db.query<DbMeeting>(
+        'INSERT INTO meetings (meeting_uuid, meeting_code, title, qr_code, created_at, updated_at) VALUES ($1, $2, $3, $4, NOW(), NOW()) RETURNING *',
+        [meetingUuid, meetingCode, title, qrCode]
+      );
+
+      return DatabaseMapper.toMeeting(result.rows[0]);
+    } catch (error) {
+      this.logger.error('Failed to create meeting in repository:', error);
+      throw error;
     }
-
-    const result = await this.db.query<DbMeeting>(
-      'INSERT INTO meetings (meeting_uuid, meeting_code, title, qr_code, created_at, updated_at) VALUES ($1, $2, $3, $4, NOW(), NOW()) RETURNING *',
-      [meetingUuid, meetingCode, title, qrCode]
-    );
-
-    return DatabaseMapper.toMeeting(result.rows[0]);
   }
 
   async getMeeting(meetingCode: string): Promise<Meeting | null> {
