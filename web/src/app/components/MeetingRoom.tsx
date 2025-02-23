@@ -349,7 +349,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
       },
       tooltip: {
         callbacks: {
-          label: function(context) {
+          label: function(context: { raw: number }) {
             const value = context.raw;
             const total = stats?.total || 1;
             const percentage = ((value / total) * 100).toFixed(1);
