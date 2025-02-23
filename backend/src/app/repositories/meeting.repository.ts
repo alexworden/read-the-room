@@ -185,7 +185,7 @@ export class MeetingRepository {
       meetingUuid: row.meeting_uuid,
       status: row.status,
       context: row.context,
-      createdAt: row.created_at
+      createdAt: row.created_at.toISOString()
     }));
   }
 

@@ -39,6 +39,10 @@ describe('Meeting API (e2e)', () => {
     await app.close();
   });
 
+  afterAll(async () => {
+    await dbService.end();
+  });
+
   describe('Meeting Management', () => {
     it('should create a new meeting', async () => {
       const response = await request(httpServer)

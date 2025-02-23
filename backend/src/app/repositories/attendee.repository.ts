@@ -82,7 +82,7 @@ export class AttendeeRepository {
   }
 
   async getMeetingAttendees(meeting_uuid: string): Promise<(Attendee & { current_status: string })[]> {
-    const result = await this.db.query(
+    const result = await this.db.query<DbAttendee & { current_status: string }>(
       'SELECT a.*, acs.status as current_status ' +
       'FROM attendees a ' +
       'LEFT JOIN attendee_current_status acs ON a.id = acs.attendee_id ' +
