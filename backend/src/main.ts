@@ -40,6 +40,8 @@ async function bootstrap() {
   const url = config.apiUrl;
   Logger.log(`🚀 Application is running on: ${url}/api`);
   Logger.log(`🌐 Allowed origins: ${origins.join(', ')}`);
+  Logger.log(`📝 Environment: NODE_ENV=${process.env.NODE_ENV}`);
+  Logger.log(`🔒 Web URL Config: RTR_WEB_HOST=${process.env.RTR_WEB_HOST}`);
 
   if (module.hot) {
     module.hot.accept();
