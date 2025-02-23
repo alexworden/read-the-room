@@ -13,6 +13,7 @@ import {
   Title,
   Tooltip,
   Legend,
+  TooltipItem,
 } from 'chart.js';
 
 ChartJS.register(
@@ -349,8 +350,8 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
       },
       tooltip: {
         callbacks: {
-          label: function(context: { raw: number }) {
-            const value = context.raw;
+          label: function(tooltipItem: TooltipItem<"bar">) {
+            const value = tooltipItem.raw as number;
             const total = stats?.total || 1;
             const percentage = ((value / total) * 100).toFixed(1);
             return `${value} (${percentage}%)`;
