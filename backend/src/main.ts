@@ -36,11 +36,14 @@ async function bootstrap() {
   // Configure CORS
   app.enableCors({
     origin: config.webUrl,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    preflightContinue: false,
+    optionsSuccessStatus: 204,
     credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
   });
-  Logger.log(`CORS enabled with origin: ${config.webUrl}`);
+
+  Logger.log(`CORS configured with origin: ${config.webUrl}`);
   
   app.setGlobalPrefix('api');
 
