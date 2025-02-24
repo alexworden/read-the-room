@@ -6,11 +6,13 @@ export class QRService {
   private readonly logger = new Logger(QRService.name);
 
   async generateQRCode(meetingId: string): Promise<string> {
-    const protocol = process.env.RTR_WEB_PROTOCOL;
+    const protocol = process.env.NODE_ENV === 'production' 
+      ? 'https'
+      : (process.env.RTR_WEB_PROTOCOL || 'http');
     const host = process.env.RTR_WEB_HOST;
     
-    if (!protocol || !host) {
-      throw new Error('Web configuration not set. Required environment variables: RTR_WEB_PROTOCOL, RTR_WEB_HOST');
+    if (!host) {
+      throw new Error('Web host not set. Required environment variable: RTR_WEB_HOST');
     }
     
     // Only include port in URL if explicitly set in environment
