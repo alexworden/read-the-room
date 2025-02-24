@@ -11,11 +11,13 @@ import { MeetingRepository } from './repositories/meeting.repository';
 import { AttendeeRepository } from './repositories/attendee.repository';
 import { QRService } from './services/qr.service';
 import { ConfigModule } from '@nestjs/config';
+import { InitDbService } from './services/init-db';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath: '.env',
     }),
   ],
   controllers: [AppController, MeetingController],
@@ -29,6 +31,7 @@ import { ConfigModule } from '@nestjs/config';
     MeetingRepository,
     AttendeeRepository,
     QRService,
+    InitDbService,
   ],
   exports: [MeetingService],
 })

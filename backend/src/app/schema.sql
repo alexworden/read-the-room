@@ -1,11 +1,3 @@
--- Drop tables in the correct order
-DROP TABLE IF EXISTS reactions CASCADE;
-DROP TABLE IF EXISTS comments CASCADE;
-DROP TABLE IF EXISTS status_updates CASCADE;
-DROP TABLE IF EXISTS attendee_current_status CASCADE;
-DROP TABLE IF EXISTS attendees CASCADE;
-DROP TABLE IF EXISTS meetings CASCADE;
-
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 

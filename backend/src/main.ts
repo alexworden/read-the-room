@@ -10,6 +10,7 @@ import { IoAdapter } from '@nestjs/platform-socket.io';
 
 import { AppModule } from './app/app.module';
 import { config } from './app/config';
+import { InitDbService } from './app/services/init-db'; // Import InitDbService
 
 declare const module: any;
 
@@ -62,6 +63,11 @@ async function bootstrap() {
 
   Logger.log(`Using port: ${port}`);
   Logger.log(`Binding to ${host}:${port}`);
+
+  // Initialize database before starting server
+  const initDbService = app.get(InitDbService);
+  await initDbService.initializeDatabase();
+
   await app.listen(port, host);
   
   // In production, use Railway's domain
