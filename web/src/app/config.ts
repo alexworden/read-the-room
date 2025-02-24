@@ -1,18 +1,20 @@
-function buildUrl(protocol: string, host: string, port: string): string {
-  const isHttps = protocol === 'https';
-  const portNumber = isHttps ? '' : `:${port}`;
-  return `${protocol}://${host}${portNumber}`;
+function buildUrl(protocol: string, host: string, port?: string): string {
+  if (!protocol || !host) {
+    throw new Error('Protocol and host are required');
+  }
+  const portPart = port ? `:${port}` : '';
+  return `${protocol}://${host}${portPart}`;
 }
 
 export const config = {
   apiUrl: buildUrl(
-    import.meta.env.RTR_API_PROTOCOL || 'http',
-    import.meta.env.RTR_API_HOST || 'localhost',
-    import.meta.env.RTR_API_PORT || '3000'
+    import.meta.env.RTR_API_PROTOCOL,
+    import.meta.env.RTR_API_HOST,
+    import.meta.env.RTR_API_PORT
   ),
   webUrl: buildUrl(
-    import.meta.env.RTR_WEB_PROTOCOL || 'http',
-    import.meta.env.RTR_WEB_HOST || 'localhost',
-    import.meta.env.RTR_WEB_PORT || '4200'
+    import.meta.env.RTR_WEB_PROTOCOL,
+    import.meta.env.RTR_WEB_HOST,
+    import.meta.env.RTR_WEB_PORT
   ),
 };
