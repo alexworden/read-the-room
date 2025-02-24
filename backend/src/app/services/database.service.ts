@@ -1,10 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { Pool, PoolClient, QueryResult } from 'pg';
 import { Logger } from '@nestjs/common';
 
 @Injectable()
-export class DatabaseService {
+export class DatabaseService implements OnModuleDestroy {
   private pool: Pool;
+  private isEnded = false;
   private readonly logger = new Logger(DatabaseService.name);
 
   constructor() {
@@ -37,7 +38,14 @@ export class DatabaseService {
   }
 
   async end(): Promise<void> {
-    await this.getPool().end();
+    if (!this.isEnded) {
+      this.isEnded = true;
+      await this.getPool().end();
+    }
+  }
+
+  async onModuleDestroy() {
+    await this.end();
   }
 
   async transaction<T>(callback: (client: PoolClient) => Promise<T>): Promise<T> {

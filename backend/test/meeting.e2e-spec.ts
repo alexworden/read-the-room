@@ -3,16 +3,17 @@ import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app/app.module';
 import { DatabaseService } from '../src/app/services/database.service';
-import * as fs from 'fs';
-import * as path from 'path';
+import { InitDbService } from '../src/app/services/init-db';
 
 describe('Meeting API (e2e)', () => {
   let app: INestApplication;
   let httpServer: any;
   let dbService: DatabaseService;
+  let initDbService: InitDbService;
+  let moduleFixture: TestingModule;
 
   beforeEach(async () => {
-    const moduleFixture: TestingModule = await Test.createTestingModule({
+    moduleFixture = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
 
@@ -20,11 +21,10 @@ describe('Meeting API (e2e)', () => {
     await app.init();
     httpServer = app.getHttpServer();
     dbService = moduleFixture.get<DatabaseService>(DatabaseService);
+    initDbService = moduleFixture.get<InitDbService>(InitDbService);
 
-    // Read and execute schema.sql
-    const schemaPath = path.join(__dirname, '../src/app/schema.sql');
-    const schema = fs.readFileSync(schemaPath, 'utf8');
-    await dbService.query(schema);
+    // Initialize database using InitDbService
+    await initDbService.initializeDatabase();
 
     // Clean up database before each test
     await dbService.query('DELETE FROM reactions');
@@ -36,11 +36,18 @@ describe('Meeting API (e2e)', () => {
   });
 
   afterEach(async () => {
-    await app.close();
+    if (app) {
+      await app.close();
+    }
   });
 
   afterAll(async () => {
-    await dbService.end();
+    if (dbService) {
+      await dbService.end();
+    }
+    if (moduleFixture) {
+      await moduleFixture.close();
+    }
   });
 
   describe('Meeting Management', () => {
