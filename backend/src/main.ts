@@ -17,6 +17,10 @@ declare const module: any;
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  // Initialize database schema
+  const initDbService = app.get(InitDbService);
+  await initDbService.initializeDatabase();
+
   Logger.log('=== DEBUG START ===');
   // Debug environment variables
   Logger.log('Environment variables:', JSON.stringify({
@@ -63,10 +67,6 @@ async function bootstrap() {
 
   Logger.log(`Using port: ${port}`);
   Logger.log(`Binding to ${host}:${port}`);
-
-  // Initialize database before starting server
-  const initDbService = app.get(InitDbService);
-  await initDbService.initializeDatabase();
 
   await app.listen(port, host);
   
