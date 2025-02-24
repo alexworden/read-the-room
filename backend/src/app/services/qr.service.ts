@@ -8,10 +8,14 @@ export class QRService {
   async generateQRCode(meetingId: string): Promise<string> {
     const protocol = process.env.RTR_WEB_PROTOCOL || 'http';
     const host = process.env.RTR_WEB_HOST || 'localhost';
-    const port = process.env.RTR_WEB_PORT || '4200';
+    const port = process.env.RTR_WEB_PORT;
     
-    // Always include port in development for local network access
-    const url = `${protocol}://${host}:${port}/join/${meetingId}`;
+    // Only include port if specified and not running in production
+    const baseUrl = port && process.env.NODE_ENV !== 'production' 
+      ? `${protocol}://${host}:${port}` 
+      : `${protocol}://${host}`;
+    
+    const url = `${baseUrl}/join/${meetingId}`;
     this.logger.log(`Generated QR code URL: ${url}`);
       
     return QRCode.toDataURL(url);
