@@ -156,12 +156,35 @@ export class InitDbService {
       }
       
       // Now check if tables need to be created
-      const result = await this.db.query<ExistsQueryResult>(
-        "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'meetings')"
-      );
+      const [meetingsExists, reactionsExists] = await Promise.all([
+        this.db.query<ExistsQueryResult>(
+          "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'meetings')"
+        ),
+        this.db.query<ExistsQueryResult>(
+          "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'reactions')"
+        )
+      ]);
       
-      if (result.rows[0].exists) {
-        this.logger.log('Tables already initialized, skipping...');
+      if (meetingsExists.rows[0].exists) {
+        this.logger.log('Meetings table exists, checking reactions table...');
+        
+        if (reactionsExists.rows[0].exists) {
+          // Check if type column exists in reactions table
+          const typeColumnExists = await this.db.query<ExistsQueryResult>(
+            "SELECT EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'reactions' AND column_name = 'type')"
+          );
+          
+          if (!typeColumnExists.rows[0].exists) {
+            this.logger.log('Type column missing in reactions table, recreating schema...');
+            // Drop and recreate the reactions table
+            await this.db.query('DROP TABLE IF EXISTS reactions CASCADE');
+            await this.db.query(SCHEMA_SQL);
+            this.logger.log('Schema updated successfully');
+            return;
+          }
+        }
+        
+        this.logger.log('Tables already initialized with correct schema, skipping...');
         return;
       }
 
