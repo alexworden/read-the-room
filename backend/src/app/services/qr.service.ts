@@ -13,9 +13,10 @@ export class QRService {
       throw new Error('Web configuration not set. Required environment variables: RTR_WEB_PROTOCOL, RTR_WEB_HOST');
     }
     
-    // Only include port if explicitly set
-    const port = process.env.RTR_WEB_PORT ? `:${process.env.RTR_WEB_PORT}` : '';
-    const url = `${protocol}://${host}${port}/join/${meetingId}`;
+    // Only include port in URL if explicitly set in environment
+    const url = process.env.RTR_WEB_PORT
+      ? `${protocol}://${host}:${process.env.RTR_WEB_PORT}/join/${meetingId}`
+      : `${protocol}://${host}/join/${meetingId}`;
       
     this.logger.log(`Generated QR code URL: ${url}`);
     return QRCode.toDataURL(url);

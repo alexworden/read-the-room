@@ -16,7 +16,7 @@ export default defineConfig({
   },
   server: {
     host: process.env.RTR_WEB_HOST || '0.0.0.0',
-    port: parseInt(process.env.RTR_WEB_PORT || '4200'),
+    port: process.env.RTR_WEB_PORT ? parseInt(process.env.RTR_WEB_PORT) : undefined,
     proxy: {
       '/api': {
         target: `${process.env.RTR_API_PROTOCOL || 'http'}://${process.env.RTR_API_HOST || 'localhost'}:${process.env.RTR_API_PORT || '3000'}`,
@@ -35,7 +35,7 @@ export default defineConfig({
     strictPort: true,
   },
   preview: {
-    port: parseInt(process.env.RTR_WEB_PORT || '4200'),
+    port: process.env.RTR_WEB_PORT ? parseInt(process.env.RTR_WEB_PORT) : undefined,
     host: '0.0.0.0',
     cors: true,
     strictPort: true,
@@ -52,6 +52,6 @@ export default defineConfig({
     'import.meta.env.RTR_API_PORT': JSON.stringify(process.env.RTR_API_PORT || '3000'),
     'import.meta.env.RTR_WEB_PROTOCOL': JSON.stringify(process.env.RTR_WEB_PROTOCOL || 'http'),
     'import.meta.env.RTR_WEB_HOST': JSON.stringify(process.env.RTR_WEB_HOST || 'localhost'),
-    'import.meta.env.RTR_WEB_PORT': JSON.stringify(process.env.RTR_WEB_PORT || '4200'),
+    'import.meta.env.RTR_WEB_PORT': JSON.stringify(process.env.RTR_WEB_PORT),
   },
 });
