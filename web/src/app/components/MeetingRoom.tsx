@@ -106,9 +106,14 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
           if (data?.currentStatus) {
             setCurrentStatus(data.currentStatus);
           }
+          // Request initial comments and stats
+          socket.emit('getComments', { meetingUuid: meeting.meetingUuid });
         });
 
         socket.on('statusUpdated', ({ attendeeId, status }) => {
+          if (attendeeId === attendee.id) {
+            setCurrentStatus(status);
+          }
           setAttendees(current =>
             current.map(a =>
               a.id === attendeeId ? { ...a, currentStatus: status } : a
@@ -120,13 +125,20 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
           setAttendees(updatedAttendees);
         });
 
+        socket.on('comments', (updatedComments: Comment[]) => {
+          setComments(updatedComments);
+        });
+
         socket.on('commentsUpdated', (updatedComments: Comment[]) => {
           setComments(updatedComments);
         });
 
+        socket.on('newComment', (comment: Comment) => {
+          setComments(current => [...current, comment]);
+        });
+
         socket.on('stats', (newStats: Record<string, number>) => {
           console.log('Received stats update:', newStats);
-          // Ensure all required properties are present with default values
           const formattedStats = {
             inactive: newStats.inactive || 0,
             engaged: newStats.engaged || 0,
@@ -201,32 +213,37 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
     };
   }, [setActiveReactions]);
 
-  const handleStatusChange = (status: string) => {
-    if (!socketRef.current?.connected) return;
+  const updateStatus = useCallback((newStatus: string) => {
+    if (!socketRef.current?.connected) {
+      console.error('Socket not connected');
+      return;
+    }
 
-    setCurrentStatus(status);
     socketRef.current.emit('updateStatus', {
       meetingUuid: meeting.meetingUuid,
       attendeeId: attendee.id,
-      status
+      status: newStatus
     });
-  };
+    setCurrentStatus(newStatus);
+  }, [meeting.meetingUuid, attendee.id]);
 
-  const handleReaction = (type: string) => {
-    if (!socketRef.current?.connected) return;
+  const sendReaction = useCallback((type: string) => {
+    if (!socketRef.current?.connected) {
+      console.error('Socket not connected');
+      return;
+    }
 
-    console.log('Sending reaction:', type);
     socketRef.current.emit('reaction', {
       meetingUuid: meeting.meetingUuid,
       attendeeId: attendee.id,
       reaction: { type }
     });
 
-    // Update local state immediately for responsive UI
+    // Add local reaction animation
     setActiveReactions(current => {
-      const oldTimeoutId = current[attendee.id]?.timeoutId;
-      if (oldTimeoutId) {
-        window.clearTimeout(oldTimeoutId);
+      // Clear existing reaction for this attendee if it exists
+      if (current[attendee.id]) {
+        window.clearTimeout(current[attendee.id].timeoutId);
       }
       
       return {
@@ -237,37 +254,19 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
         }
       };
     });
-  };
+  }, [meeting.meetingUuid, attendee.id, clearReactionAfterDelay]);
 
   const handleCommentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newComment.trim() || !socketRef.current?.connected) return;
 
-    socketRef.current.emit('comment', {
+    socketRef.current.emit('addComment', {
       meetingUuid: meeting.meetingUuid,
       attendeeId: attendee.id,
       content: newComment.trim()
     });
 
     setNewComment('');
-  };
-
-  const updateStatus = async (status: string) => {
-    if (!socketRef.current?.connected) {
-      console.error('Socket not connected');
-      return;
-    }
-
-    try {
-      socketRef.current.emit('updateStatus', {
-        meetingUuid: meeting.meetingUuid,
-        attendeeId: attendee.id,
-        status
-      });
-      setCurrentStatus(status);
-    } catch (error) {
-      console.error('Error sending status update:', error);
-    }
   };
 
   const copyToClipboard = async () => {
@@ -301,23 +300,6 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
       setTimeout(() => setShowCopied(false), 2000);
     } catch (err) {
       console.error('Failed to copy:', err);
-    }
-  };
-
-  const addComment = async () => {
-    if (!socketRef.current?.connected || !newComment.trim()) {
-      return;
-    }
-
-    try {
-      socketRef.current.emit('addComment', {
-        meetingUuid: meeting.meetingUuid,
-        attendeeId: attendee.id,
-        content: newComment.trim()
-      });
-      setNewComment('');
-    } catch (error) {
-      console.error('Error sending comment:', error);
     }
   };
 
@@ -414,7 +396,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
             <h2 className="text-lg font-semibold mb-2">Status</h2>
             <div className="flex justify-start space-x-4">
               <button
-                onClick={() => handleStatusChange(ATTENDEE_STATUS.ENGAGED)}
+                onClick={() => updateStatus(ATTENDEE_STATUS.ENGAGED)}
                 className={`p-3 rounded-lg text-2xl ${
                   currentStatus === ATTENDEE_STATUS.ENGAGED
                     ? 'bg-green-100 ring-2 ring-green-400'
@@ -425,7 +407,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
                 😊
               </button>
               <button
-                onClick={() => handleStatusChange(ATTENDEE_STATUS.CONFUSED)}
+                onClick={() => updateStatus(ATTENDEE_STATUS.CONFUSED)}
                 className={`p-3 rounded-lg text-2xl ${
                   currentStatus === ATTENDEE_STATUS.CONFUSED
                     ? 'bg-yellow-100 ring-2 ring-yellow-400'
@@ -436,7 +418,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
                 🤔
               </button>
               <button
-                onClick={() => handleStatusChange(ATTENDEE_STATUS.INACTIVE)}
+                onClick={() => updateStatus(ATTENDEE_STATUS.INACTIVE)}
                 className={`p-3 rounded-lg text-2xl ${
                   currentStatus === ATTENDEE_STATUS.INACTIVE
                     ? 'bg-gray-200 ring-2 ring-gray-400'
@@ -457,7 +439,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
             <h2 className="text-lg font-semibold mb-2">Quick Reactions</h2>
             <div className="flex justify-start space-x-4">
               <button
-                onClick={() => handleReaction(REACTION_TYPE.AGREE)}
+                onClick={() => sendReaction(REACTION_TYPE.AGREE)}
                 className={`p-3 rounded-lg text-2xl ${
                   activeReactions[attendee.id]?.type === REACTION_TYPE.AGREE
                     ? 'bg-blue-100 animate-pulse'
@@ -468,7 +450,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
                 👍
               </button>
               <button
-                onClick={() => handleReaction(REACTION_TYPE.DISAGREE)}
+                onClick={() => sendReaction(REACTION_TYPE.DISAGREE)}
                 className={`p-3 rounded-lg text-2xl ${
                   activeReactions[attendee.id]?.type === REACTION_TYPE.DISAGREE
                     ? 'bg-red-100 animate-pulse'

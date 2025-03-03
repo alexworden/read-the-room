@@ -4,47 +4,9 @@ import { Meeting, Attendee, AttendeeStatus } from './types/meeting.types';
 import { CreateMeeting } from './components/CreateMeeting';
 import { JoinMeeting } from './components/JoinMeeting';
 import { MeetingRoom } from './components/MeetingRoom';
+import { HostView } from './components/HostView';
 import { config } from './config';
 import { convertAttendeeData } from './utils/attendee.utils';
-
-// Wrapper component for CreateMeeting to handle navigation
-const CreateMeetingWrapper = () => {
-  const navigate = useNavigate();
-
-  const handleMeetingCreated = async (newMeeting: Meeting, attendeeName: string) => {
-    try {
-      // Join the meeting as the creator
-      const joinResponse = await fetch(`${config.apiUrl}/api/meetings/${newMeeting.meetingCode}/attendees`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ name: attendeeName }),
-      });
-
-      if (!joinResponse.ok) {
-        throw new Error('Failed to join meeting');
-      }
-
-      const attendeeData = await joinResponse.json();
-      const attendee = convertAttendeeData(attendeeData);
-
-      // Navigate directly to the meeting room
-      navigate(`/room/${newMeeting.meetingCode}`, { 
-        state: { 
-          meeting: newMeeting,
-          attendee: attendee
-        } 
-      });
-    } catch (error) {
-      console.error('Failed to join meeting:', error);
-      // If join fails, navigate to join page as fallback
-      navigate(`/join/${newMeeting.meetingCode}`, { state: { meeting: newMeeting } });
-    }
-  };
-
-  return <CreateMeeting onMeetingCreated={handleMeetingCreated} />;
-};
 
 // Wrapper component for JoinMeeting to handle URL parameters
 const JoinMeetingWrapper = () => {
@@ -212,18 +174,99 @@ const MeetingRoomWrapper = () => {
   return <MeetingRoom meeting={meeting} attendee={attendee} />;
 };
 
+// Wrapper component for HostView to handle state
+const HostViewWrapper = () => {
+  const { meetingId } = useParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [meeting, setMeeting] = useState<Meeting | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchMeetingData = async () => {
+      setLoading(true);
+      try {
+        // If we have meeting data in location state, use it
+        if (location.state?.meeting && location.state?.attendeeId) {
+          setMeeting(location.state.meeting);
+          setLoading(false);
+          return;
+        }
+
+        // If missing required data, redirect to create page
+        navigate('/create');
+      } catch (error) {
+        console.error('Failed to fetch meeting:', error);
+        navigate('/create');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMeetingData();
+  }, [meetingId, location.state, navigate]);
+
+  if (loading) {
+    return <div className="text-center py-8">Loading...</div>;
+  }
+
+  if (!meeting || !location.state?.attendeeId) {
+    return null;
+  }
+
+  return (
+    <div className="w-full max-w-none">
+      <HostView 
+        meeting={meeting}
+        hostName={location.state?.hostName || 'Host'}
+        attendeeId={location.state.attendeeId}
+      />
+    </div>
+  );
+};
+
 // Layout component that contains the routes
 const AppLayout = () => {
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="w-full max-w-lg mx-auto px-4 py-4 sm:py-8">
-        <Routes>
-          <Route path="/" element={<Navigate to="/create" replace />} />
-          <Route path="/create" element={<CreateMeetingWrapper />} />
-          <Route path="/join/:meetingId" element={<JoinMeetingWrapper />} />
-          <Route path="/room/:meetingId" element={<MeetingRoomWrapper />} />
-        </Routes>
-      </div>
+      <Routes>
+        <Route 
+          path="/" 
+          element={
+            <div className="w-full max-w-lg mx-auto px-4 py-4 sm:py-8">
+              <Navigate to="/create" replace />
+            </div>
+          } 
+        />
+        <Route 
+          path="/create" 
+          element={
+            <div className="w-full max-w-lg mx-auto px-4 py-4 sm:py-8">
+              <CreateMeeting />
+            </div>
+          } 
+        />
+        <Route 
+          path="/join/:meetingId" 
+          element={
+            <div className="w-full max-w-lg mx-auto px-4 py-4 sm:py-8">
+              <JoinMeetingWrapper />
+            </div>
+          } 
+        />
+        <Route 
+          path="/room/:meetingId" 
+          element={
+            <div className="w-full max-w-lg mx-auto px-4 py-4 sm:py-8">
+              <MeetingRoomWrapper />
+            </div>
+          } 
+        />
+        <Route 
+          path="/host/:meetingId" 
+          element={<HostViewWrapper />} 
+        />
+      </Routes>
     </div>
   );
 };

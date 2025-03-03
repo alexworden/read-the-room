@@ -11,6 +11,7 @@ import { Server, Socket } from 'socket.io';
 import { MeetingStateService } from '../services/meeting-state.service';
 import { MeetingService } from '../services/meeting.service';
 import { MeetingRepository } from '../repositories/meeting.repository';
+import { CommentService } from '../services/comment.service';
 import { Logger, OnModuleInit } from '@nestjs/common';
 import { config } from '../config';
 
@@ -35,6 +36,7 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect,
     private readonly meetingStateService: MeetingStateService,
     private readonly meetingService: MeetingService,
     private readonly meetingRepository: MeetingRepository,
+    private readonly commentService: CommentService,
   ) {}
 
   onModuleInit() {
@@ -192,6 +194,33 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect,
     }
   }
 
+  @SubscribeMessage('getComments')
+  async handleGetComments(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { meetingUuid: string },
+  ) {
+    const { meetingUuid } = data;
+    
+    try {
+      if (!this.isClientInRoom(meetingUuid, client.id)) {
+        this.logger.error(`Client ${client.id} not in meeting room ${meetingUuid}`);
+        client.emit('error', { message: 'Not in meeting room' });
+        return;
+      }
+
+      const comments = await this.commentService.getComments(meetingUuid);
+      
+      // Emit to requesting client
+      client.emit('comments', comments);
+      
+      // Also emit to all clients in the room for consistency
+      this.server.to(meetingUuid).emit('commentsUpdated', comments);
+    } catch (error) {
+      this.logger.error(`Error getting comments for meeting ${meetingUuid}:`, error);
+      client.emit('error', { message: 'Failed to get comments' });
+    }
+  }
+
   @SubscribeMessage('comment')
   async handleComment(
     @ConnectedSocket() client: Socket,
@@ -206,17 +235,17 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect,
         return;
       }
 
-      // Add comment to database
-      const comment = await this.meetingService.addComment(attendeeId, meetingUuid, content);
+      const comment = await this.commentService.createComment(meetingUuid, attendeeId, content);
       
-      // Get updated comments list
-      const comments = await this.meetingService.getComments(meetingUuid);
+      // Emit new comment to all clients
+      this.server.to(meetingUuid).emit('newComment', comment);
       
-      // Emit updated comments to all clients in the room
+      // Get and emit updated comments to maintain consistency
+      const comments = await this.commentService.getComments(meetingUuid);
       this.server.to(meetingUuid).emit('commentsUpdated', comments);
     } catch (error) {
-      this.logger.error(`Error adding comment in meeting ${meetingUuid}:`, error);
-      client.emit('error', { message: 'Failed to add comment' });
+      this.logger.error(`Error creating comment in meeting ${meetingUuid}:`, error);
+      client.emit('error', { message: 'Failed to create comment' });
     }
   }
 

@@ -53,3 +53,12 @@ export interface Comment {
   content: string;
   createdAt: string;
 }
+
+export interface MeetingStats {
+  total: number;
+  inactive: number;
+  engaged: number;
+  confused: number;
+  agree: number;
+  disagree: number;
+}

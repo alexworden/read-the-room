@@ -12,6 +12,8 @@ import { AttendeeRepository } from './repositories/attendee.repository';
 import { QRService } from './services/qr.service';
 import { ConfigModule } from '@nestjs/config';
 import { InitDbService } from './services/init-db';
+import { CommentService } from './services/comment.service';
+import { CommentRepository } from './repositories/comment.repository';
 
 @Module({
   imports: [
@@ -32,6 +34,8 @@ import { InitDbService } from './services/init-db';
     AttendeeRepository,
     QRService,
     InitDbService,
+    CommentService,
+    CommentRepository,
   ],
   exports: [MeetingService],
 })
