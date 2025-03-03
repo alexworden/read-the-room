@@ -439,7 +439,7 @@ export const HostView: React.FC<HostViewProps> = ({ meeting, hostName, attendeeI
               <img
                 src={meeting.qrCode}
                 alt="QR Code"
-                className="w-full max-w-[300px] h-auto"
+                className="w-[90%] h-auto"
               />
             </div>
             <p className="text-lg text-gray-600 break-all text-center bg-gray-100 p-4 rounded">
