@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Meeting, Attendee, Comment, ATTENDEE_STATUS, REACTION_TYPE } from '../types/meeting.types';
+import { Meeting, Attendee, Comment, ATTENDEE_STATUS, REACTION_TYPE, ReactionType } from '../types/meeting.types';
 import { io, Socket } from 'socket.io-client';
 import { debounce } from 'lodash';
 import { config } from '../config';
@@ -51,12 +51,15 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
   const [attendees, setAttendees] = useState<Attendee[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+  const [commentError, setCommentError] = useState<string | null>(null);
   const commentsRef = useRef<HTMLDivElement>(null);
   const MAX_RETRIES = 3;
   const joinUrl = `${window.location.origin}/join/${meeting.meetingCode}`;
   const socketRef = useRef<Socket | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
 
-  const [activeReactions, setActiveReactions] = useState<Record<string, { type: string; timeoutId: number }>>({});
+  const [activeReactions, setActiveReactions] = useState<Record<string, { type: ReactionType; timeoutId: number }>>({});
 
   // Scroll comments into view when new ones arrive
   useEffect(() => {
@@ -68,7 +71,6 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
   // Debounced stats update to prevent rapid UI updates
   const updateStats = useCallback(
     debounce((newStats: { inactive: number; engaged: number; confused: number; agree: number; disagree: number; total: number }) => {
-      console.log('Updating stats state:', newStats);
       setStats(newStats);
     }, 500),
     []
@@ -85,121 +87,133 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
     return timeoutId;
   }, []);
 
+  // Socket connection and event handlers
   useEffect(() => {
-    const connectSocket = async () => {
-      try {
-        const socket = io(config.apiUrl, {
-          transports: ['websocket'],
-          autoConnect: false
-        });
+    const socket = io(config.apiUrl, {
+      path: '/socket.io',
+      transports: ['websocket']
+    });
 
-        socketRef.current = socket;
+    socketRef.current = socket;
 
-        socket.connect();
-        socket.emit('joinMeeting', {
+    socket.on('connect', () => {
+      setIsConnected(true);
+      // Join the meeting room after connecting
+      socket.emit('joinMeeting', {
+        meetingUuid: meeting.meetingUuid,
+        attendeeId: attendee.id
+      });
+    });
+
+    socket.on('joinedMeeting', (data: { currentStatus: string }) => {
+      if (data?.currentStatus) {
+        setCurrentStatus(data.currentStatus);
+      }
+      // Request initial comments and stats
+      socket.emit('getComments', { meetingUuid: meeting.meetingUuid });
+    });
+
+    socket.on('disconnect', () => {
+      setIsConnected(false);
+    });
+
+    socket.on('error', (error: { message: string }) => {
+      console.error('Socket error:', error);
+      setCommentError(error.message);
+    });
+
+    // Handle new comments
+    socket.on('newComment', (comment: Comment) => {
+      setComments(prevComments => {
+        // Check if comment already exists to prevent duplicates
+        if (prevComments.some(c => c.id === comment.id)) {
+          return prevComments;
+        }
+        return [...prevComments, comment];
+      });
+      const scrollToBottom = () => {
+        if (commentsRef.current) {
+          commentsRef.current.scrollTop = commentsRef.current.scrollHeight;
+        }
+      };
+      scrollToBottom();
+    });
+
+    // Handle comments updated
+    socket.on('commentsUpdated', (updatedComments: Comment[]) => {
+      setComments(updatedComments);
+      const scrollToBottom = () => {
+        if (commentsRef.current) {
+          commentsRef.current.scrollTop = commentsRef.current.scrollHeight;
+        }
+      };
+      scrollToBottom();
+    });
+
+    socket.on('stats', (newStats: {
+      [ATTENDEE_STATUS.ENGAGED]: number;
+      [ATTENDEE_STATUS.CONFUSED]: number;
+      [ATTENDEE_STATUS.INACTIVE]: number;
+      [REACTION_TYPE.AGREE]: number;
+      [REACTION_TYPE.DISAGREE]: number;
+    }) => {
+      const formattedStats = {
+        engaged: newStats[ATTENDEE_STATUS.ENGAGED] || 0,
+        confused: newStats[ATTENDEE_STATUS.CONFUSED] || 0,
+        inactive: newStats[ATTENDEE_STATUS.INACTIVE] || 0,
+        agree: newStats[REACTION_TYPE.AGREE] || 0,
+        disagree: newStats[REACTION_TYPE.DISAGREE] || 0,
+        total: Object.values(newStats).reduce((sum, count) => sum + count, 0)
+      };
+      setStats(formattedStats);
+    });
+
+    socket.on('reactions', (reactions: Record<string, { type: ReactionType; timestamp: number }>) => {
+      // Transform reactions to match our state type
+      const formattedReactions = Object.entries(reactions).reduce((acc, [key, reaction]) => {
+        // Create a timeout to remove the reaction after 3 seconds
+        const timeoutId = window.setTimeout(() => {
+          setActiveReactions(prev => {
+            const { [key]: _, ...rest } = prev;
+            return rest;
+          });
+        }, 3000);
+
+        acc[key] = { type: reaction.type, timeoutId };
+        return acc;
+      }, {} as Record<string, { type: ReactionType; timeoutId: number }>);
+
+      setActiveReactions(formattedReactions);
+    });
+
+    // Set up heartbeat
+    const heartbeatInterval = setInterval(() => {
+      if (socket.connected) {
+        socket.emit('heartbeat', {
           meetingUuid: meeting.meetingUuid,
           attendeeId: attendee.id
         });
-
-        socket.on('joinedMeeting', (data: { currentStatus: string }) => {
-          setIsConnecting(false);
-          if (data?.currentStatus) {
-            setCurrentStatus(data.currentStatus);
-          }
-          // Request initial comments and stats
-          socket.emit('getComments', { meetingUuid: meeting.meetingUuid });
-        });
-
-        socket.on('statusUpdated', ({ attendeeId, status }) => {
-          if (attendeeId === attendee.id) {
-            setCurrentStatus(status);
-          }
-          setAttendees(current =>
-            current.map(a =>
-              a.id === attendeeId ? { ...a, currentStatus: status } : a
-            )
-          );
-        });
-
-        socket.on('attendeesUpdated', (updatedAttendees: Attendee[]) => {
-          setAttendees(updatedAttendees);
-        });
-
-        socket.on('comments', (updatedComments: Comment[]) => {
-          setComments(updatedComments);
-        });
-
-        socket.on('commentsUpdated', (updatedComments: Comment[]) => {
-          setComments(updatedComments);
-        });
-
-        socket.on('newComment', (comment: Comment) => {
-          setComments(current => [...current, comment]);
-        });
-
-        socket.on('stats', (newStats: Record<string, number>) => {
-          console.log('Received stats update:', newStats);
-          const formattedStats = {
-            inactive: newStats.inactive || 0,
-            engaged: newStats.engaged || 0,
-            confused: newStats.confused || 0,
-            agree: newStats.agree || 0,
-            disagree: newStats.disagree || 0,
-            total: newStats.total || 0
-          };
-          console.log('Formatted stats:', formattedStats);
-          updateStats(formattedStats);
-        });
-
-        socket.on('error', (error: { message: string }) => {
-          console.error('Socket error:', error.message);
-          if (retryCount < MAX_RETRIES) {
-            setRetryCount(prev => prev + 1);
-            setIsConnecting(true);
-            socket.connect();
-          }
-        });
-
-        socket.on('disconnect', () => {
-          console.log('Socket disconnected');
-          setIsConnecting(true);
-        });
-
-        socket.on('connect', () => {
-          console.log('Socket connected/reconnected, rejoining meeting');
-          // Rejoin the meeting when socket reconnects
-          socket.emit('joinMeeting', {
-            meetingUuid: meeting.meetingUuid,
-            attendeeId: attendee.id
-          });
-        });
-
-        // Set up heartbeat
-        const heartbeatInterval = setInterval(() => {
-          if (socket.connected) {
-            socket.emit('heartbeat', {
-              meetingUuid: meeting.meetingUuid,
-              attendeeId: attendee.id
-            });
-          }
-        }, 30000); // Send heartbeat every 30 seconds
-
-        return () => {
-          clearInterval(heartbeatInterval);
-          socket.emit('leaveMeeting', {
-            meetingUuid: meeting.meetingUuid,
-            attendeeId: attendee.id
-          });
-          socket.disconnect();
-        };
-      } catch (error) {
-        console.error('Socket connection error:', error);
-        setIsConnecting(false);
       }
-    };
+    }, 30000); // Send heartbeat every 30 seconds
 
-    connectSocket();
-  }, [meeting.meetingUuid, attendee.id, retryCount]);
+    // Cleanup on unmount
+    return () => {
+      clearInterval(heartbeatInterval);
+      socket.off('connect');
+      socket.off('disconnect');
+      socket.off('error');
+      socket.off('newComment');
+      socket.off('commentsUpdated');
+      socket.off('stats');
+      socket.off('reactions');
+      socket.off('joinedMeeting');
+      socket.emit('leaveMeeting', {
+        meetingUuid: meeting.meetingUuid,
+        attendeeId: attendee.id
+      });
+      socket.disconnect();
+    };
+  }, [meeting.meetingUuid, attendee.id]);
 
   useEffect(() => {
     return () => {
@@ -227,7 +241,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
     setCurrentStatus(newStatus);
   }, [meeting.meetingUuid, attendee.id]);
 
-  const sendReaction = useCallback((type: string) => {
+  const sendReaction = useCallback((type: ReactionType) => {
     if (!socketRef.current?.connected) {
       console.error('Socket not connected');
       return;
@@ -256,17 +270,71 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
     });
   }, [meeting.meetingUuid, attendee.id, clearReactionAfterDelay]);
 
-  const handleCommentSubmit = (e: React.FormEvent) => {
+  const handleCommentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newComment.trim() || !socketRef.current?.connected) return;
+    setCommentError(null);
+    
+    if (!newComment.trim()) {
+      return;
+    }
+    
+    if (!socketRef.current?.connected) {
+      setCommentError('Not connected to server. Please try again.');
+      return;
+    }
 
-    socketRef.current.emit('addComment', {
-      meetingUuid: meeting.meetingUuid,
-      attendeeId: attendee.id,
-      content: newComment.trim()
-    });
+    setIsSubmittingComment(true);
+    
+    try {
+      // Create a promise that resolves on either newComment or commentsUpdated
+      const commentPromise = new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Comment submission timed out'));
+        }, 5000); // 5 second timeout
 
-    setNewComment('');
+        // Set up one-time error handler for this submission
+        socketRef.current?.once('error', (error: { message: string }) => {
+          clearTimeout(timeout);
+          reject(new Error(error.message));
+        });
+
+        // Set up one-time success handlers for either event
+        const handleSuccess = () => {
+          clearTimeout(timeout);
+          resolve(true);
+        };
+
+        socketRef.current?.once('newComment', handleSuccess);
+        socketRef.current?.once('commentsUpdated', handleSuccess);
+
+        // Clean up event listeners on timeout or error
+        const cleanup = () => {
+          socketRef.current?.off('newComment', handleSuccess);
+          socketRef.current?.off('commentsUpdated', handleSuccess);
+        };
+
+        // Emit the comment
+        socketRef.current?.emit('comment', {
+          meetingUuid: meeting.meetingUuid,
+          attendeeId: attendee.id,
+          content: newComment.trim()
+        });
+      });
+
+      // Clear input immediately for better UX
+      setNewComment('');
+      
+      // Wait for the comment to be processed
+      await commentPromise;
+      
+    } catch (error) {
+      console.error('Error submitting comment:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to submit comment. Please try again.';
+      setCommentError(errorMessage);
+      setNewComment(newComment.trim()); // Restore the comment text
+    } finally {
+      setIsSubmittingComment(false);
+    }
   };
 
   const copyToClipboard = async () => {
@@ -472,21 +540,21 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
           ref={commentsRef}
           className="mb-4 h-48 overflow-y-auto space-y-2 border rounded-lg p-2"
         >
-          {comments.map((comment) => {
-            const commentAttendee = attendees.find(a => a.id === comment.attendeeId);
-            return (
-              <div key={comment.id} className="flex items-start space-x-2">
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
-                  {commentAttendee?.name.charAt(0).toUpperCase()}
-                </div>
-                <div className="flex-1 bg-gray-50 rounded-lg p-2">
-                  <p className="text-sm font-semibold">{commentAttendee?.name}</p>
-                  <p className="text-sm">{comment.content}</p>
-                </div>
+          {comments.map((comment) => (
+            <div key={comment.id} className="flex items-start space-x-2">
+              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
+                {comment.attendeeName?.charAt(0).toUpperCase()}
               </div>
-            );
-          })}
+              <div className="flex-1 bg-gray-50 rounded-lg p-2">
+                <p className="text-sm font-semibold">{comment.attendeeName}</p>
+                <p className="text-sm">{comment.content}</p>
+              </div>
+            </div>
+          ))}
         </div>
+        {commentError && (
+          <div className="text-red-500 text-sm mb-2">{commentError}</div>
+        )}
         <div className="flex space-x-2">
           <input
             type="text"
@@ -494,14 +562,16 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({ meeting, attendee }) =
             onChange={(e) => setNewComment(e.target.value)}
             placeholder="Type your comment..."
             className="flex-1 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            onKeyPress={(e) => e.key === 'Enter' && handleCommentSubmit(e)}
+            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleCommentSubmit(e)}
           />
           <button
             onClick={handleCommentSubmit}
-            disabled={!newComment.trim()}
-            className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={!newComment.trim() || isSubmittingComment}
+            className={`p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed ${
+              isSubmittingComment ? 'animate-pulse' : ''
+            }`}
           >
-            {FiMessageCircle({ size: 20 })}
+            {isSubmittingComment ? '...' : FiMessageCircle({ size: 20 })}
           </button>
         </div>
       </div>

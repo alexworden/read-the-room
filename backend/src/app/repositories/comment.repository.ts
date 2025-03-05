@@ -21,13 +21,23 @@ export class CommentRepository {
 
   async create(meetingUuid: string, attendeeId: string, content: string): Promise<Comment> {
     const query = `
-      INSERT INTO comments (meeting_uuid, attendee_id, content)
-      VALUES ($1, $2, $3)
-      RETURNING id, attendee_id, content, created_at
+      INSERT INTO comments (id, meeting_uuid, attendee_id, content)
+      VALUES (gen_random_uuid(), $1, $2, $3)
+      RETURNING id, meeting_uuid, attendee_id, content, created_at, updated_at
     `;
     
-    const result = await this.databaseService.query<Comment>(query, [meetingUuid, attendeeId, content]);
-    return result.rows[0];
+    try {
+      const result = await this.databaseService.query<Comment>(query, [meetingUuid, attendeeId, content]);
+      if (!result.rows[0]) {
+        throw new Error('Failed to create comment - no row returned');
+      }
+      return result.rows[0];
+    } catch (error) {
+      if (error.message.includes('violates foreign key constraint')) {
+        throw new Error('Invalid attendee or meeting ID');
+      }
+      throw error;
+    }
   }
 
   async findAttendeeNameById(attendeeId: string): Promise<string | undefined> {

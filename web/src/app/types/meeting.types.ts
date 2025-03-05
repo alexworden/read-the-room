@@ -49,9 +49,10 @@ export interface Reaction {
 export interface Comment {
   id: string;
   attendeeId: string;
-  meetingId: string;
   content: string;
   createdAt: string;
+  updatedAt?: string;
+  attendeeName?: string;
 }
 
 export interface MeetingStats {

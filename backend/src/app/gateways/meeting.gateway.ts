@@ -229,6 +229,8 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect,
     const { meetingUuid, attendeeId, content } = data;
     
     try {
+      this.logger.log(`[Comment] Received new comment from ${attendeeId} in meeting ${meetingUuid}`);
+      
       if (!this.isClientInRoom(meetingUuid, client.id)) {
         this.logger.error(`Client ${client.id} not in meeting room ${meetingUuid}`);
         client.emit('error', { message: 'Not in meeting room' });
@@ -236,16 +238,33 @@ export class MeetingGateway implements OnGatewayConnection, OnGatewayDisconnect,
       }
 
       const comment = await this.commentService.createComment(meetingUuid, attendeeId, content);
+      this.logger.log(`[Comment] Created comment ${comment.id}`);
       
       // Emit new comment to all clients
-      this.server.to(meetingUuid).emit('newComment', comment);
+      const formattedComment = {
+        ...comment,
+        id: comment.id,
+        attendeeId: comment.attendee_id,
+        content: comment.content,
+        createdAt: comment.created_at,
+        attendeeName: comment.attendee_name
+      };
+      this.server.to(meetingUuid).emit('newComment', formattedComment);
       
       // Get and emit updated comments to maintain consistency
       const comments = await this.commentService.getComments(meetingUuid);
-      this.server.to(meetingUuid).emit('commentsUpdated', comments);
+      const formattedComments = comments.map(c => ({
+        ...c,
+        id: c.id,
+        attendeeId: c.attendee_id,
+        content: c.content,
+        createdAt: c.created_at,
+        attendeeName: c.attendee_name
+      }));
+      this.server.to(meetingUuid).emit('commentsUpdated', formattedComments);
     } catch (error) {
-      this.logger.error(`Error creating comment in meeting ${meetingUuid}:`, error);
-      client.emit('error', { message: 'Failed to create comment' });
+      this.logger.error(`[Comment] Error creating comment: ${error.message}`);
+      client.emit('error', { message: error.message || 'Failed to create comment' });
     }
   }
 

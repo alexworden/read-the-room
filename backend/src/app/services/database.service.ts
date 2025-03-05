@@ -32,7 +32,8 @@ export class DatabaseService implements OnModuleDestroy {
     try {
       return await this.getPool().query(text, params);
     } catch (error) {
-      this.logger.error(`Failed to execute query: ${text}`, error);
+      this.logger.error(`Failed to execute query: ${text}`);
+      this.logger.error('Error:', error.message);
       throw error;
     }
   }

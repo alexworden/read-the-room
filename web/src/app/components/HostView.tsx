@@ -5,7 +5,7 @@ import { debounce } from 'lodash';
 import { config } from '../config';
 import { Pie } from 'react-chartjs-2';
 import { FiThumbsUp, FiThumbsDown } from 'react-icons/fi';
-import * as d3 from 'd3';
+import { scaleLinear } from 'd3-scale';
 import cloud from 'd3-cloud';
 import {
   Chart as ChartJS,
@@ -13,13 +13,15 @@ import {
   Tooltip,
   Legend,
   ChartData,
-  ChartOptions
+  ChartOptions,
+  Title
 } from 'chart.js';
 
 ChartJS.register(
   ArcElement,
   Tooltip,
-  Legend
+  Legend,
+  Title
 );
 
 interface HostViewProps {
@@ -47,6 +49,7 @@ interface WordCloudWord {
   style?: string;
   weight?: string | number;
   padding?: number;
+  color?: string;
 }
 
 export const HostView: React.FC<HostViewProps> = ({ meeting, hostName, attendeeId }) => {
@@ -73,7 +76,7 @@ export const HostView: React.FC<HostViewProps> = ({ meeting, hostName, attendeeI
   const pieChartData: ChartData<'pie'> = {
     labels: ['Engaged', 'Confused', 'Inactive'],
     datasets: [{
-      data: [stats.engaged || 0, stats.confused || 0, stats.inactive || 0],
+      data: [stats.engaged, stats.confused, stats.inactive],
       backgroundColor: ['#4CAF50', '#FFC107', '#9E9E9E'],
       borderColor: ['#388E3C', '#FFA000', '#757575'],
       borderWidth: 1,
@@ -106,8 +109,8 @@ export const HostView: React.FC<HostViewProps> = ({ meeting, hostName, attendeeI
         padding: 16,
         callbacks: {
           label: (context) => {
-            const value = context.raw as number || 0;
-            const total = stats.total || 1;
+            const value = context.raw as number;
+            const total = Math.max(stats.total, 1); // Prevent division by zero
             const percentage = ((value / total) * 100).toFixed(1);
             return `${context.label}: ${value} (${percentage}%)`;
           }
@@ -133,20 +136,25 @@ export const HostView: React.FC<HostViewProps> = ({ meeting, hostName, attendeeI
   );
 
   const processComments = useCallback((comments: Comment[]) => {
-    console.log('Processing comments:', comments.length); // Temporary debug log
+    console.log('Processing comments for word cloud:', comments.length);
     
     // Create a map to count word frequencies
     const wordMap = new Map<string, number>();
     
     comments.forEach(comment => {
+      if (!comment.content) {
+        console.warn('Comment missing content:', comment);
+        return;
+      }
+
       // Split into words and clean up
       const words = comment.content
         .toLowerCase()
         .replace(/[^\w\s]/g, '') // Remove punctuation
         .split(/\s+/)
         .filter(word => 
-          word.length > 3 && 
-          !['the', 'and', 'for', 'that', 'this', 'with', 'was', 'were', 'what'].includes(word)
+          word.length > 2 && // Allow 3+ letter words
+          !['the', 'and', 'for', 'that', 'this', 'with', 'was', 'were', 'what', 'have', 'from'].includes(word)
         );
       
       words.forEach(word => {
@@ -154,46 +162,54 @@ export const HostView: React.FC<HostViewProps> = ({ meeting, hostName, attendeeI
       });
     });
 
-    console.log('Word frequencies:', Object.fromEntries(wordMap)); // Temporary debug log
+    const colors = [
+      '#2563EB', // Blue
+      '#DC2626', // Red
+      '#059669', // Green
+      '#7C3AED', // Purple
+      '#EA580C', // Orange
+      '#0891B2', // Cyan
+      '#4F46E5', // Indigo
+      '#BE185D', // Pink
+    ];
 
     // Convert to word cloud format
     const words: WordCloudWord[] = Array.from(wordMap.entries())
       .map(([text, value]) => ({ 
         text, 
-        value,
-        font: "Arial, sans-serif",
+        value: Math.max(value * 2, 10), // Scale up the sizes
+        font: 'Arial',
         style: 'normal',
-        weight: 500,
-        padding: 5
+        weight: value > 3 ? 'bold' : 'normal', // Make frequent words bold
+        padding: 2,
+        color: colors[Math.floor(Math.random() * colors.length)]
       }))
       .sort((a, b) => b.value - a.value)
-      .slice(0, 50); // Limit to top 50 words
+      .slice(0, 30); // Limit to top 30 words for better visibility
 
     // Generate word cloud layout
     if (containerWidth > 0 && words.length > 0) {
-      console.log('Generating layout with width:', containerWidth, 'words:', words.length);
-      
-      // Calculate base size and scaling factor based on number of words
-      const maxWords = words.length;
-      const baseSize = Math.min(containerWidth / 8, 300); // Larger base size
-      const scaleFactor = Math.max(1, Math.sqrt(50 / maxWords)); // Scale up when fewer words
-      
-      cloud()
-        .size([containerWidth, containerWidth * 0.6]) // More vertical space
+      const height = containerWidth * 0.6;
+      const layout = cloud()
+        .size([containerWidth, height])
         .words(words)
-        .padding(3) // Reduced padding for tighter packing
-        .rotate(0)
+        .padding(2)
+        .rotate(() => 0) // No rotation for better readability
         .fontSize(d => {
-          const frequency = (d as WordCloudWord).value;
-          const maxFreq = Math.max(...words.map(w => w.value));
-          // Non-linear scaling for better size distribution
-          return Math.pow(frequency / maxFreq, 0.7) * baseSize * scaleFactor;
+          const word = d as WordCloudWord;
+          const maxValue = Math.max(...words.map(w => w.value));
+          const minValue = Math.min(...words.map(w => w.value));
+          const scale = scaleLinear()
+            .domain([minValue, maxValue])
+            .range([20, Math.min(containerWidth / 4, height / 3)]); // Dynamic max size based on container
+          return scale(word.value);
         })
         .on('end', (words) => {
-          console.log('Word cloud layout complete, words:', words.length);
+          console.log('Word cloud layout complete:', words.length, 'words');
           setWordCloudData(words as WordCloudWord[]);
-        })
-        .start();
+        });
+
+      layout.start();
     } else {
       setWordCloudData([]);
     }
@@ -224,32 +240,31 @@ export const HostView: React.FC<HostViewProps> = ({ meeting, hostName, attendeeI
 
   useEffect(() => {
     const socket = io(config.apiUrl, {
-      transports: ['websocket', 'polling'],
-      autoConnect: false,
       path: '/socket.io',
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-      forceNew: true,
-      timeout: 10000
+      transports: ['websocket']
     });
 
     socketRef.current = socket;
 
+    socket.on('connect', () => {
+      setIsConnecting(false);
+      socket.emit('joinMeeting', {
+        meetingUuid: meeting.meetingUuid,
+        attendeeId
+      });
+    });
+
+    socket.on('stats', (newStats: MeetingStats) => {
+      if (!newStats || typeof newStats !== 'object') {
+        console.error('Received invalid stats data:', newStats);
+        return;
+      }
+      updateStats(newStats);
+    });
+
     socket.on('connect_error', (error) => {
       console.error('Socket connection error:', error.message);
       setIsConnecting(true);
-    });
-
-    socket.on('connect', () => {
-      console.log('Socket connected, joining meeting...'); // Debug log
-      setIsConnecting(false);
-      
-      // Join meeting first
-      socket.emit('joinMeeting', {
-        meetingUuid: meeting.meetingUuid,
-        attendeeId: attendeeId,
-      });
     });
 
     socket.on('joinedMeeting', () => {
@@ -272,10 +287,6 @@ export const HostView: React.FC<HostViewProps> = ({ meeting, hostName, attendeeI
     socket.on('newComment', (comment: Comment) => {
       console.log('Received new comment'); // Debug log
       setComments(prev => [...prev, comment]);
-    });
-
-    socket.on('stats', (data: MeetingStats) => {
-      updateStats(data);
     });
 
     socket.on('statsUpdate', (data: MeetingStats) => {
@@ -365,6 +376,47 @@ export const HostView: React.FC<HostViewProps> = ({ meeting, hostName, attendeeI
                 </h2>
               </div>
 
+              {/* Word Cloud */}
+              <div 
+                ref={wordCloudRef}
+                className="bg-white rounded-lg p-4 flex-grow relative overflow-hidden"
+                style={{ minHeight: '400px', height: '100%' }}
+              >
+                <h2 className="text-2xl font-bold mb-4">Meeting Word Cloud</h2>
+                <svg 
+                  width="100%" 
+                  height="calc(100% - 48px)"
+                  preserveAspectRatio="xMidYMid meet"
+                  style={{ 
+                    position: 'absolute',
+                    top: '48px', // Account for header
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                  }}
+                >
+                  <g transform={`translate(${containerWidth/2},${(containerWidth * 0.6)/2})`}>
+                    {wordCloudData.map((word, i) => (
+                      <text
+                        key={i}
+                        style={{
+                          fill: word.color,
+                          fontFamily: 'Arial',
+                          fontWeight: word.weight,
+                          cursor: 'default',
+                          userSelect: 'none',
+                        }}
+                        textAnchor="middle"
+                        transform={`translate(${word.x},${word.y})`}
+                        fontSize={word.size}
+                      >
+                        {word.text}
+                      </text>
+                    ))}
+                  </g>
+                </svg>
+              </div>
+
               {/* Reactions */}
               <div className="bg-green-50 rounded-lg p-6">
                 <h2 className="text-2xl font-bold text-green-900 mb-4">Reactions</h2>
@@ -379,51 +431,11 @@ export const HostView: React.FC<HostViewProps> = ({ meeting, hostName, attendeeI
                   </div>
                 </div>
               </div>
-
-              {/* Word Cloud */}
-              <div 
-                ref={wordCloudRef}
-                className="bg-white rounded-lg p-4 flex-grow min-h-[400px] relative overflow-hidden"
-                style={{ minHeight: '400px' }}
-              >
-                <h2 className="text-2xl font-bold mb-4">Meeting Word Cloud</h2>
-                <svg 
-                  width="100%" 
-                  height="100%" 
-                  style={{ 
-                    position: 'absolute',
-                    top: '50px',
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                  }}
-                >
-                  <g transform={`translate(${containerWidth/2},${(containerWidth * 0.6)/2})`}>
-                    {wordCloudData.map((word, i) => (
-                      <text
-                        key={i}
-                        style={{
-                          fill: `hsl(${(word.value * 30) % 360}, 70%, 60%)`,
-                          fontSize: word.size + 'px',
-                          fontFamily: "Arial, sans-serif",
-                          fontWeight: word.weight,
-                          letterSpacing: '0.02em',
-                        }}
-                        textAnchor="middle"
-                        transform={`translate(${word.x},${word.y}) rotate(${word.rotate})`}
-                      >
-                        {word.text}
-                      </text>
-                    ))}
-                  </g>
-                </svg>
-              </div>
             </div>
 
             {/* Right column - Pie Chart */}
             <div className="bg-white rounded-lg p-6 flex flex-col">
-              <h2 className="text-2xl font-bold mb-4">Engagement Overview</h2>
-              <div className="flex-grow relative">
+              <div className="flex-grow relative" style={{ minHeight: '400px' }}>
                 <Pie data={pieChartData} options={pieChartOptions} />
               </div>
             </div>
