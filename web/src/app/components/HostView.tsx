@@ -4,7 +4,7 @@ import { io, Socket } from 'socket.io-client';
 import { debounce } from 'lodash';
 import { config } from '../config';
 import { Pie } from 'react-chartjs-2';
-import { FiThumbsUp, FiThumbsDown } from 'react-icons/fi';
+import { FiThumbsUp, FiThumbsDown, FiCopy } from 'react-icons/fi';
 import { scaleLinear } from 'd3-scale';
 import cloud from 'd3-cloud';
 import {
@@ -67,6 +67,7 @@ export const HostView: React.FC<HostViewProps> = ({ meeting, hostName, attendeeI
   const [containerWidth, setContainerWidth] = useState(0);
   const [floatingReactions, setFloatingReactions] = useState<FloatingReaction[]>([]);
   const [isConnecting, setIsConnecting] = useState(true);
+  const [showCopied, setShowCopied] = useState(false);
   const socketRef = useRef<Socket | null>(null);
   const animationFrameRef = useRef<number>();
   const wordCloudRef = useRef<HTMLDivElement>(null);
@@ -237,6 +238,16 @@ export const HostView: React.FC<HostViewProps> = ({ meeting, hostName, attendeeI
     );
     animationFrameRef.current = requestAnimationFrame(animateReactions);
   }, []);
+
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(joinUrl);
+      setShowCopied(true);
+      setTimeout(() => setShowCopied(false), 2000);
+    } catch (error) {
+      console.error('Failed to copy URL:', error);
+    }
+  };
 
   useEffect(() => {
     const socket = io(config.apiUrl, {
@@ -447,16 +458,30 @@ export const HostView: React.FC<HostViewProps> = ({ meeting, hostName, attendeeI
           {/* QR Code */}
           <div className="mb-8">
             <h2 className="text-3xl font-bold mb-6 text-center">Join the Meeting</h2>
-            <div className="flex justify-center mb-6">
-              <img
-                src={meeting.qrCode}
-                alt="QR Code"
-                className="w-[90%] h-auto"
-              />
+            <div className="flex flex-col items-center space-y-4">
+              <div className="w-[90%] flex justify-center">
+                <img
+                  src={meeting.qrCode}
+                  alt="QR Code"
+                  className="w-full h-auto"
+                />
+              </div>
+              <div className="flex items-center justify-center space-x-2 bg-gray-50 px-4 py-2 rounded-lg">
+                <span className="text-gray-600 text-sm md:text-base">{joinUrl}</span>
+                <button
+                  onClick={copyToClipboard}
+                  className="relative p-2 text-blue-600 hover:text-blue-700 focus:outline-none"
+                  title="Copy meeting link"
+                >
+                  <FiCopy size={20} />
+                  {showCopied && (
+                    <span className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-sm px-2 py-1 rounded">
+                      Copied!
+                    </span>
+                  )}
+                </button>
+              </div>
             </div>
-            <p className="text-lg text-gray-600 break-all text-center bg-gray-100 p-4 rounded">
-              {joinUrl}
-            </p>
           </div>
 
           {/* Floating reactions */}
